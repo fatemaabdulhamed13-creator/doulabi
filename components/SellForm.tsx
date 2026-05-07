@@ -11,13 +11,13 @@ import { SUB_CATEGORIES } from "@/lib/subcategories";
 
 const CATEGORIES = [
   "فساتين", "أحذية", "حقائب", "إكسسوارات",
-  "ملابس رجالية", "ملابس أطفال", "ملابس رياضية", "أخرى",
+  "ملابس رجالية", "ملابس أطفال", "ملابس رياضية", "ملابس تقليدية", "أخرى",
 ];
 
 const CONDITIONS = ["جديد بالعلامة", "كالجديد", "مستعمل - حالة جيدة", "مستعمل - حالة مقبولة"];
 
 const LETTER_SIZES = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "XXXL"];
-const CLOTHING_NUM_SIZES = Array.from({ length: 8 }, (_, i) => String(34 + i * 2));
+const CLOTHING_NUM_SIZES = Array.from({ length: 12 }, (_, i) => String(34 + i * 2));
 const SHOE_SIZES = Array.from({ length: 10 }, (_, i) => String(36 + i));
 
 const BRANDS = [

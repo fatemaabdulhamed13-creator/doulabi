@@ -21,6 +21,17 @@ type Product = {
   image_urls: string[];
 };
 
+/** Maps the English brand value stored in the DB → Arabic display name */
+const BRAND_AR: Record<string, string> = {
+  Zara:          "زارا",
+  Monsoon:       "مونسون",
+  Dune:          "ديون",
+  "Sherri Hill": "شيري هيل",
+  "Michael Kors": "مايكل كورس",
+  Gizia:         "جيزيا",
+  Other:         "أخرى",
+};
+
 export default async function SearchPage({ searchParams }: Props) {
   const sp = await searchParams;
 
@@ -211,7 +222,7 @@ export default async function SearchPage({ searchParams }: Props) {
 
                     <div className="flex flex-col gap-1 px-0.5">
                       <p className="text-[10px] font-bold text-primary uppercase tracking-widest">
-                        {p.brand}
+                        {BRAND_AR[p.brand] ?? p.brand}
                       </p>
                       <p className="text-sm font-semibold text-foreground line-clamp-1">
                         {p.title}

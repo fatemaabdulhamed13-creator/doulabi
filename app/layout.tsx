@@ -4,6 +4,7 @@ import "./globals.css";
 import BottomNav from "@/components/bottom-nav";
 import Navbar from "@/components/navbar";
 import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
+import PwaInstallPrompt from "@/components/PwaInstallPrompt";
 import { Toaster } from "sonner";
 
 const cairo = Cairo({
@@ -63,6 +64,7 @@ export default function RootLayout({
         <BottomNav />
         <Toaster position="top-center" dir="rtl" richColors />
         <ServiceWorkerRegistration />
+        <PwaInstallPrompt />
       </body>
     </html>
   );

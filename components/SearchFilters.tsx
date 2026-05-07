@@ -20,7 +20,7 @@ const BRANDS = [
 ];
 
 const LETTER_SIZES       = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "XXXL"];
-const CLOTHING_NUM_SIZES = Array.from({ length: 8 },  (_, i) => String(34 + i * 2));
+const CLOTHING_NUM_SIZES = Array.from({ length: 12 },  (_, i) => String(34 + i * 2));
 const SHOE_SIZES         = Array.from({ length: 10 }, (_, i) => String(36 + i));
 
 const COLORS = [
@@ -217,14 +217,6 @@ export default function SearchFilters() {
         </div>
         <span className="text-sm text-foreground">توصيل خارج المدينة</span>
       </label>
-
-      {/* Buttons */}
-      <button
-        type="submit"
-        className="w-full py-2.5 rounded-xl bg-primary text-white font-bold text-sm hover:brightness-110 active:scale-[0.98] transition-all mt-1"
-      >
-        تطبيق الفلاتر
-      </button>
 
       {hasFilters && (
         <button
