@@ -15,15 +15,17 @@ export async function updateProfileAction(
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (authError || !user) redirect('/login')
 
-  const name = String(formData.get('name') ?? '').trim()
-  const city = String(formData.get('city') ?? '').trim()
-  const bio  = String(formData.get('bio')  ?? '').trim() || null
+  const full_name       = String(formData.get('name')        ?? '').trim()
+  const whatsapp_number = String(formData.get('whatsapp')    ?? '').trim() || null
+  const city            = String(formData.get('city')        ?? '').trim() || null
+  const bio             = String(formData.get('bio')         ?? '').trim() || null
 
-  if (!name) return { error: 'الاسم مطلوب.' }
+  if (!full_name) return { error: 'الاسم مطلوب.' }
 
   const { error } = await supabase
     .from('profiles')
-    .upsert({ id: user.id, name, city: city || null, bio }, { onConflict: 'id' })
+    .update({ full_name, whatsapp_number, city, bio })
+    .eq('id', user.id)
 
   if (error) return { error: error.message }
 

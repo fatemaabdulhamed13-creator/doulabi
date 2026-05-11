@@ -48,7 +48,7 @@ export default async function ProfilePage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, created_at")
+    .select("full_name, bio, created_at")
     .eq("id", user.id)
     .single();
 
@@ -97,7 +97,11 @@ export default async function ProfilePage() {
 
           <h2 className="text-xl font-bold text-foreground">{profile.full_name}</h2>
 
-
+          {profile.bio && (
+            <p className="text-sm text-muted-foreground text-center max-w-xs leading-relaxed">
+              {profile.bio}
+            </p>
+          )}
 
           <p className="text-xs text-muted-foreground tracking-wide">انضمت في {joinYear}</p>
         </div>

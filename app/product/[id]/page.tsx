@@ -88,7 +88,6 @@ export default async function ProductPage({ params }: Props) {
     initialIsFavorited = !!fav;
   }
 
-  const imageUrl       = product.image_urls[0] ?? null;
   const seller         = product.profiles;
   const sellerInitial  = seller?.full_name.charAt(0) ?? "؟";
   const whatsappHref   = seller?.whatsapp_number
@@ -110,7 +109,7 @@ export default async function ProductPage({ params }: Props) {
         {/* ── Left column: image ──────────────────────────────────── */}
         <div>
           <ProductImagePanel
-            imageUrl={imageUrl}
+            imageUrls={product.image_urls}
             title={product.title}
             productId={product.id}
             initialIsFavorited={initialIsFavorited}

@@ -2,7 +2,7 @@
 
 import { startTransition, useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Camera, CheckCircle2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, ChevronDown } from "lucide-react";
 import { updateProfileAction } from "@/app/actions/profile";
 
 /* ── Data ────────────────────────────────────────────────────────────────── */
@@ -23,23 +23,28 @@ const fieldLabel = "block text-sm font-semibold text-foreground mb-2";
 /* ── Props ───────────────────────────────────────────────────────────────── */
 
 interface Props {
-  initialName: string;
-  initialCity: string;
-  initialBio:  string;
+  initialName:      string;
+  initialWhatsapp:  string;
+  initialCity:      string;
+  initialBio:       string;
 }
 
 /* ── Component ───────────────────────────────────────────────────────────── */
 
-export default function EditProfileForm({ initialName, initialCity, initialBio }: Props) {
+export default function EditProfileForm({
+  initialName,
+  initialWhatsapp,
+  initialCity,
+  initialBio,
+}: Props) {
   const router = useRouter();
 
   const [state, formAction, pending] = useActionState(updateProfileAction, null);
 
-  const [name, setName] = useState(initialName);
-  const [city, setCity] = useState(initialCity);
-  const [bio,  setBio]  = useState(initialBio);
-
-  // Auto-dismiss success toast after 3 s and navigate back
+  const [name,      setName]     = useState(initialName);
+  const [whatsapp,  setWhatsapp] = useState(initialWhatsapp);
+  const [city,      setCity]     = useState(initialCity);
+  const [bio,       setBio]      = useState(initialBio);
   const [showSuccess, setShowSuccess] = useState(false);
 
   useEffect(() => {
@@ -59,7 +64,6 @@ export default function EditProfileForm({ initialName, initialCity, initialBio }
     startTransition(() => formAction(fd));
   }
 
-  // Derive avatar initial from name
   const initial = name.trim()[0] ?? "؟";
 
   return (
@@ -88,22 +92,11 @@ export default function EditProfileForm({ initialName, initialCity, initialBio }
 
           <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
 
-            {/* ── Avatar ─────────────────────────────────────────────── */}
-            <div className="flex flex-col items-center gap-3 pb-2">
-              <div className="relative">
-                <div className="w-24 h-24 rounded-full bg-primary/10 ring-4 ring-primary/20 flex items-center justify-center">
-                  <span className="text-4xl font-bold text-primary">{initial}</span>
-                </div>
-                {/* Camera overlay — kept as UI affordance; avatar upload not in scope */}
-                <button
-                  type="button"
-                  aria-label="تغيير الصورة"
-                  className="absolute bottom-0 left-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center shadow-md hover:brightness-110 transition-all"
-                >
-                  <Camera className="h-4 w-4 text-white" />
-                </button>
+            {/* ── Avatar initial ─────────────────────────────────────── */}
+            <div className="flex flex-col items-center gap-2 pb-2">
+              <div className="w-24 h-24 rounded-full bg-primary/10 ring-4 ring-primary/20 flex items-center justify-center">
+                <span className="text-4xl font-bold text-primary">{initial}</span>
               </div>
-              <p className="text-xs text-muted-foreground">اضغط لتغيير الصورة</p>
             </div>
 
             {/* ── Full name ──────────────────────────────────────────── */}
@@ -120,6 +113,25 @@ export default function EditProfileForm({ initialName, initialCity, initialBio }
                 required
                 className={input}
               />
+            </div>
+
+            {/* ── WhatsApp number ────────────────────────────────────── */}
+            <div>
+              <label htmlFor="whatsapp" className={fieldLabel}>رقم واتساب</label>
+              <input
+                id="whatsapp"
+                name="whatsapp"
+                type="tel"
+                inputMode="tel"
+                value={whatsapp}
+                onChange={(e) => setWhatsapp(e.target.value)}
+                placeholder="مثال: 218912345678"
+                dir="ltr"
+                className={`${input} text-left placeholder:text-right`}
+              />
+              <p className="text-xs text-muted-foreground mt-1.5">
+                يُستخدم لتواصل المشترين معك — أدخل الرقم مع رمز البلد (218...)
+              </p>
             </div>
 
             {/* ── City ───────────────────────────────────────────────── */}
@@ -139,13 +151,7 @@ export default function EditProfileForm({ initialName, initialCity, initialBio }
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
-                {/* Custom chevron */}
-                <svg
-                  className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none"
-                  viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                >
-                  <path d="m6 9 6 6 6-6" />
-                </svg>
+                <ChevronDown className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
               </div>
             </div>
 
@@ -173,7 +179,7 @@ export default function EditProfileForm({ initialName, initialCity, initialBio }
               <p className="text-sm text-red-500 text-center">{state.error}</p>
             )}
 
-            {/* ── Success toast ───────────────────────────────────────── */}
+            {/* ── Success toast ──────────────────────────────────────── */}
             {showSuccess && (
               <div className="flex items-center gap-2 justify-center text-sm font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-3">
                 <CheckCircle2 className="h-4 w-4 shrink-0" />

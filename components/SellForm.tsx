@@ -1,11 +1,11 @@
 "use client";
 
 import { startTransition, useActionState, useRef, useState } from "react";
-import imageCompression from "browser-image-compression";
-import { Camera, ChevronDown, ShieldAlert, X } from "lucide-react";
+import { Camera, ChevronDown, Loader2, ShieldAlert, X } from "lucide-react";
 import { createListingAction } from "@/app/actions/product";
 import PageHeader from "@/components/PageHeader";
 import { SUB_CATEGORIES } from "@/lib/subcategories";
+import { compressListingImages } from "@/lib/imageCompression";
 
 /* ── Data ────────────────────────────────────────────────────────────────── */
 
@@ -64,6 +64,9 @@ export default function SellForm() {
 
   const [images,      setImages]      = useState<File[]>([]);
   const [previews,    setPreviews]    = useState<string[]>([]);
+  // compressing[i] tracks 0-100 progress for each incoming file slot
+  const [compressing, setCompressing] = useState<number[] | null>(null);
+
   const [title,       setTitle]       = useState("");
   const [price,       setPrice]       = useState("");
   const [negotiable,  setNegotiable]  = useState(false);
@@ -79,26 +82,37 @@ export default function SellForm() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  /** Returns true while at least one file is still being compressed. */
+  const isCompressing = compressing !== null && compressing.some((p) => p < 100);
+
   async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
 
-    const options = {
-      maxSizeMB: 0.2,
-      maxWidthOrHeight: 1080,
-      useWebWorker: true,
-      fileType: "image/webp" as const,
-    };
+    // Initialise progress slots (0 % each) for the incoming batch
+    const progress = files.map(() => 0);
+    setCompressing(progress);
 
-    const compressed = await Promise.all(
-      files.map((f) => imageCompression(f, options))
-    );
+    try {
+      const compressed = await compressListingImages(
+        files,
+        (fileIdx, pct) => {
+          setCompressing((prev) => {
+            if (!prev) return prev;
+            const next = [...prev];
+            next[fileIdx] = pct;
+            return next;
+          });
+        },
+      );
 
-    const newPreviews = compressed.map((f) => URL.createObjectURL(f));
-
-    setImages((prev) => [...prev, ...compressed]);
-    setPreviews((prev) => [...prev, ...newPreviews]);
-    e.target.value = "";
+      const newPreviews = compressed.map((f) => URL.createObjectURL(f));
+      setImages((prev) => [...prev, ...compressed]);
+      setPreviews((prev) => [...prev, ...newPreviews]);
+    } finally {
+      setCompressing(null);
+      e.target.value = "";
+    }
   }
 
   function removeImage(index: number) {
@@ -156,22 +170,55 @@ export default function SellForm() {
 
           <label
             htmlFor="image-upload"
-            onClick={() => fileInputRef.current?.click()}
-            className="
-              w-full aspect-video rounded-2xl
+            onClick={() => !isCompressing && fileInputRef.current?.click()}
+            aria-disabled={isCompressing}
+            className={`
+              relative w-full aspect-video rounded-2xl
               border-2 border-dashed border-border bg-muted
               flex flex-col items-center justify-center gap-3
-              hover:border-primary/50 hover:bg-primary/5
-              transition-all duration-200 cursor-pointer
-            "
+              transition-all duration-200
+              ${isCompressing
+                ? "cursor-not-allowed opacity-70"
+                : "hover:border-primary/50 hover:bg-primary/5 cursor-pointer"
+              }
+            `}
           >
-            <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
-              <Camera className="h-7 w-7 text-primary" />
-            </div>
-            <div className="text-center">
-              <p className="text-sm font-semibold text-foreground">رفع صور المنتج</p>
-              <p className="text-xs text-muted-foreground mt-1">اضغط لإضافة حتى ٨ صور</p>
-            </div>
+            {isCompressing ? (
+              /* ── Compression in-progress overlay ── */
+              <div className="flex flex-col items-center gap-3 px-6 w-full">
+                <Loader2 className="h-7 w-7 text-primary animate-spin" />
+                <p className="text-sm font-semibold text-foreground">جاري ضغط الصور…</p>
+                {compressing && (
+                  <div className="w-full space-y-1.5 mt-1">
+                    {compressing.map((pct, idx) => (
+                      <div key={idx} className="w-full">
+                        <div className="flex justify-between text-[11px] text-muted-foreground mb-0.5">
+                          <span>صورة {idx + 1}</span>
+                          <span>{pct}%</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-muted-foreground/20 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-primary transition-all duration-200"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* ── Default idle state ── */
+              <>
+                <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Camera className="h-7 w-7 text-primary" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-foreground">رفع صور المنتج</p>
+                  <p className="text-xs text-muted-foreground mt-1">اضغط لإضافة حتى ٨ صور</p>
+                </div>
+              </>
+            )}
           </label>
 
           <div className="mt-4 bg-amber-50/50 border border-amber-100 rounded-xl p-4 flex gap-3">
@@ -523,7 +570,7 @@ export default function SellForm() {
           {/* ── Submit ─────────────────────────────────────────────── */}
           <button
             type="submit"
-            disabled={pending}
+            disabled={pending || isCompressing}
             className="
               w-full py-4 rounded-2xl mt-2
               bg-primary text-white font-bold text-[15px]
@@ -532,7 +579,12 @@ export default function SellForm() {
               shadow-[0_4px_24px_rgba(93,42,66,0.40)]
             "
           >
-            {pending ? "جاري الرفع..." : "نشر الإعلان"}
+            {isCompressing
+              ? "جاري ضغط الصور…"
+              : pending
+              ? "جاري الرفع..."
+              : "نشر الإعلان"
+            }
           </button>
 
         </div>{/* end right column */}

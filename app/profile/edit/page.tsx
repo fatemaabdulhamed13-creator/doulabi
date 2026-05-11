@@ -16,15 +16,16 @@ export default async function EditProfilePage() {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("name, city, bio")
+    .select("full_name, whatsapp_number, city, bio")
     .eq("id", user.id)
     .single();
 
   return (
     <EditProfileForm
-      initialName={profile?.name  ?? ""}
-      initialCity={profile?.city  ?? ""}
-      initialBio={profile?.bio   ?? ""}
+      initialName={profile?.full_name       ?? ""}
+      initialWhatsapp={profile?.whatsapp_number ?? ""}
+      initialCity={profile?.city            ?? ""}
+      initialBio={profile?.bio              ?? ""}
     />
   );
 }
