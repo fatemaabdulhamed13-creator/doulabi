@@ -109,8 +109,14 @@ export default function SellForm() {
       const newPreviews = compressed.map((f) => URL.createObjectURL(f));
       setImages((prev) => [...prev, ...compressed]);
       setPreviews((prev) => [...prev, ...newPreviews]);
-    } catch {
-      setUploadError("تعذّر معالجة الصورة. يرجى تجربة صورة أخرى أو التقاط صورة جديدة.");
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err)
+      console.error('[SellForm] image processing error:', detail)
+      setUploadError(
+        detail.includes('HEIC')
+          ? 'تعذّر تحويل صورة iPhone. جرّب التقاط صورة جديدة أو إرسالها كـ JPEG من تطبيق الصور.'
+          : 'تعذّر معالجة الصورة. يرجى تجربة صورة أخرى أو التقاط صورة جديدة.',
+      )
     } finally {
       setCompressing(null);
       e.target.value = "";
@@ -165,7 +171,7 @@ export default function SellForm() {
             ref={fileInputRef}
             type="file"
             multiple
-            accept="image/*"
+            accept="image/*, .heic, .heif"
             className="hidden"
             onChange={handleImageChange}
           />

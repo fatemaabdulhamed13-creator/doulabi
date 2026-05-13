@@ -82,20 +82,25 @@ function isHeicFile(file: File): boolean {
 async function normalizeFile(file: File): Promise<File> {
   if (!isHeicFile(file)) return file
 
-  // Dynamic import — WASM only fetched when a HEIC file is actually selected
-  const { default: heic2any } = await import('heic2any')
+  try {
+    // Dynamic import — WASM only fetched when a HEIC file is actually selected
+    const { default: heic2any } = await import('heic2any')
 
-  const result = await heic2any({
-    blob: file,
-    toType: 'image/jpeg',
-    quality: 0.92, // high quality here; browser-image-compression will compress further
-  })
+    const result = await heic2any({
+      blob: file,
+      toType: 'image/jpeg',
+      quality: 0.92,
+    })
 
-  // heic2any returns Blob | Blob[] (burst photos yield multiple frames; use the first)
-  const blob = Array.isArray(result) ? result[0] : result
+    // heic2any returns Blob | Blob[] (burst photos yield multiple frames; use the first)
+    const blob = Array.isArray(result) ? result[0] : result
 
-  const base = file.name.replace(/\.[^.]+$/, '') || 'image'
-  return new File([blob], `${base}.jpg`, { type: 'image/jpeg' })
+    const base = file.name.replace(/\.[^.]+$/, '') || 'image'
+    return new File([blob], `${base}.jpg`, { type: 'image/jpeg' })
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    throw new Error(`HEIC Conversion Failed: ${detail}`)
+  }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
