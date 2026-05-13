@@ -80,6 +80,7 @@ export default async function PublicProfilePage({ params }: Props) {
                         src={img}
                         alt={`${p.brand} — ${p.title}`}
                         fill
+                        unoptimized
                         sizes="(max-width: 640px) 50vw, 25vw"
                         className="object-cover group-hover:scale-105 transition-transform duration-300"
                       />

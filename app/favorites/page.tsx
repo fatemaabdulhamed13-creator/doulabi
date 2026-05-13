@@ -55,6 +55,7 @@ export default async function FavoritesPage() {
                           src={img}
                           alt={`${item.brand} — ${item.title}`}
                           fill
+                          unoptimized
                           sizes="(max-width: 768px) 50vw, 25vw"
                           className="object-cover group-hover:scale-105 transition-transform duration-300"
                         />

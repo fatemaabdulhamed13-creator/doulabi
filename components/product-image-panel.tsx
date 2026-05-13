@@ -37,6 +37,7 @@ export default function ProductImagePanel({ imageUrls, title, productId, initial
             alt={`${title} — ${activeIdx + 1}`}
             fill
             priority
+            unoptimized
             sizes="(max-width: 768px) 100vw, 50vw"
             className="object-cover"
           />
@@ -125,6 +126,7 @@ export default function ProductImagePanel({ imageUrls, title, productId, initial
                 src={url}
                 alt={`صورة ${i + 1}`}
                 fill
+                unoptimized
                 sizes="64px"
                 className="object-cover"
               />

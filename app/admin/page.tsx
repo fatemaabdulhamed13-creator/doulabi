@@ -111,6 +111,7 @@ export default async function AdminPage() {
                             src={url}
                             alt={`${product.title} — صورة ${idx + 1}`}
                             fill
+                            unoptimized
                             sizes="144px"
                             className="object-cover hover:scale-105 transition-transform duration-200"
                           />

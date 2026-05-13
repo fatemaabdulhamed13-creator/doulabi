@@ -68,7 +68,7 @@ export async function createListingAction(
 
   const {
     title, price, category, brand, size_type, size_value, condition,
-    description, is_open_to_offers, delivery_available, color, city,
+    description, is_open_to_offers, delivery_available, color, city, subcategory,
   } = parsed.data
 
   // ── Upload images ─────────────────────────────────────────────────────────
@@ -113,8 +113,9 @@ export async function createListingAction(
       description: description ?? null,
       is_open_to_offers,
       delivery_available,
-      color: color ?? null,
-      city:  city  ?? null,
+      color:       color       ?? null,
+      city:        city        ?? null,
+      subcategory: subcategory ?? null,
       image_urls,
       status,
     })

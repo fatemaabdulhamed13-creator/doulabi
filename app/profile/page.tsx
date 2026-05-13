@@ -171,6 +171,7 @@ export default async function ProfilePage() {
                         src={img}
                         alt={product.title}
                         fill
+                        unoptimized
                         sizes="(max-width: 768px) 50vw, 25vw"
                         className={`object-cover transition-transform duration-300 ${canLink ? "group-hover:scale-105" : ""}`}
                       />

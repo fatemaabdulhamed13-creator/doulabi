@@ -253,6 +253,7 @@ export default async function Home() {
                             src={img}
                             alt={`${p.brand} — ${p.title}`}
                             fill
+                            unoptimized
                             sizes="188px"
                             className="object-cover group-hover:scale-105 transition-transform duration-300"
                           />

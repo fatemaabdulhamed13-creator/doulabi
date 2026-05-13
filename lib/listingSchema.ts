@@ -16,8 +16,15 @@ import { z } from 'zod'
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-/** Accepted MIME types for uploaded images. */
-export const ACCEPTED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
+/** Accepted MIME types for uploaded images. HEIC/HEIF are allowed here as a
+ *  fallback safety net; in practice the client converts them to WebP before upload. */
+export const ACCEPTED_IMAGE_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+] as const
 
 /** Hard per-file size cap before compression (15 MB). Prevents browser OOM. */
 export const MAX_RAW_FILE_SIZE_BYTES = 15 * 1024 * 1024 // 15 MB

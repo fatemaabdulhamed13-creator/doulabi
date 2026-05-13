@@ -1,68 +1,42 @@
 /**
- * Sub-category map — keyed by the exact `category` URL param value.
- * Edit the arrays below to add / remove / rename sub-categories at any time.
+ * Sub-category map — keyed by the exact `category` value used in the DB / URL params.
+ *
+ * Dual keys for traditional wear:
+ *   - "ملابس تقليدية"  — value stored in DB (set by SellForm)
+ *   - "traditional"    — URL param sent by the homepage category link
+ * Both point to the same list so pills appear on the search page regardless
+ * of which key the category arrives under.
+ *
+ * Categories with no sub-categories (أحذية, حقائب, إكسسوارات, ملابس أطفال)
+ * are intentionally omitted — absent keys return undefined, which the guards
+ * in SellForm and the search page treat as "no sub-categories".
  */
 export const SUB_CATEGORIES: Record<string, string[]> = {
   فساتين: [
-    "فساتين سهرة",
-    "فساتين مناسبات",
-    "فساتين كاجوال",
-    "فساتين زفاف",
-    "فساتين قصيرة",
-    "فساتين ماكسي",
+    "سهرة / زفاف",
+    "حفلات بسيطة",
+    "كاجوال",
+    "بدلات رسمية",
+    "محضر",
   ],
-  أحذية: [
-    "كعب عالي",
-    "شُبَّاط مسطح",
-    "صنادل",
-    "أحذية رياضية",
-    "بوتس",
-    "موكاسان",
+
+  // SellForm stores this Arabic string as the category value
+  "ملابس تقليدية": [
+    "بدلة كبيرة",
+    "بدلة صغيرة",
+    "بودري",
+    "رداء",
+    "تكشيطة",
+    "عبايات",
   ],
-  حقائب: [
-    "حقائب يد",
-    "حقائب كتف",
-    "حقائب ظهر",
-    "حقائب سفر",
-    "محافظ",
-    "كلتش",
-  ],
-  إكسسوارات: [
-    "مجوهرات",
-    "ساعات",
-    "نظارات",
-    "أوشحة",
-    "أحزمة",
-    "قبعات",
-  ],
+
+  // Homepage links to ?category=traditional — same list, different key
   traditional: [
-    "جلابية",
-    "فرملة",
-    "ملابس تقليدية أطفال",
-    "أزياء قبلية",
-    "تطريز يدوي",
+    "بدلة كبيرة",
+    "بدلة صغيرة",
+    "بودري",
+    "رداء",
+    "تكشيطة",
+    "عبايات",
   ],
-  // Arabic alias used by the SellForm (same data, different key)
-  "أزياء تقليدية": [
-    "جلابية",
-    "فرملة",
-    "ملابس تقليدية أطفال",
-    "أزياء قبلية",
-    "تطريز يدوي",
-  ],
-  kids: [
-    "ملابس رضع",
-    "ملابس بنات",
-    "ملابس أولاد",
-    "بدلات أطفال",
-    "ملابس مدرسية",
-  ],
-  // Arabic alias used by the SellForm
-  "ملابس أطفال": [
-    "ملابس رضع",
-    "ملابس بنات",
-    "ملابس أولاد",
-    "بدلات أطفال",
-    "ملابس مدرسية",
-  ],
-};
+}

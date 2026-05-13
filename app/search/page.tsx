@@ -55,8 +55,7 @@ export default async function SearchPage({ searchParams }: Props) {
 
   if (q)           query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`);
   if (category)    query = query.eq("category",           category);
-  // subcategory filter — active once the column exists in the schema
-  // if (subcategory) query = query.eq("subcategory",        subcategory);
+  if (subcategory) query = query.eq("subcategory", subcategory);
   if (size)        query = query.eq("size_value",          size);
   if (minPrice)    query = query.gte("price",              minPrice);
   if (maxPrice)    query = query.lte("price",              maxPrice);
@@ -210,6 +209,7 @@ export default async function SearchPage({ searchParams }: Props) {
                           src={img}
                           alt={`${p.brand} — ${p.title}`}
                           fill
+                          unoptimized
                           sizes="(max-width: 768px) 50vw, 25vw"
                           className="object-cover group-hover:scale-105 transition-transform duration-300"
                         />
