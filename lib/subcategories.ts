@@ -7,9 +7,8 @@
  * Both point to the same list so pills appear on the search page regardless
  * of which key the category arrives under.
  *
- * Categories with no sub-categories (أحذية, حقائب, إكسسوارات, ملابس أطفال)
- * are intentionally omitted — absent keys return undefined, which the guards
- * in SellForm and the search page treat as "no sub-categories".
+ * أحذية / حقائب / إكسسوارات use the same Arabic string in the SellForm,
+ * the DB, and the homepage URL params — so one key covers all three contexts.
  */
 export const SUB_CATEGORIES: Record<string, string[]> = {
   فساتين: [
@@ -18,6 +17,34 @@ export const SUB_CATEGORIES: Record<string, string[]> = {
     "كاجوال",
     "بدلات رسمية",
     "محضر",
+  ],
+
+  أحذية: [
+    "كعب عالي",
+    "شبشب",
+    "بوت",
+    "سنيكر",
+    "صندل",
+    "موكاسان",
+  ],
+
+  حقائب: [
+    "حقيبة يد",
+    "حقيبة كتف",
+    "كلتش",
+    "حقيبة ظهر",
+    "محفظة",
+    "حقيبة سفر",
+    "شنطة سفر كبيرة",
+  ],
+
+  إكسسوارات: [
+    "مجوهرات",
+    "ساعات",
+    "نظارات",
+    "أوشحة وشالات",
+    "أحزمة",
+    "قبعات",
   ],
 
   // SellForm stores this Arabic string as the category value
