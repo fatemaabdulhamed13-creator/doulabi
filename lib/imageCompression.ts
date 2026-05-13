@@ -184,5 +184,6 @@ function toNamedWebpFile(blob: Blob, originalName: string): File {
     .slice(0, 60)
     || 'image'
 
-  return new File([blob], `${base}_${Date.now()}.webp`, { type: 'image/webp' })
+  const uid = crypto.randomUUID().replace(/-/g, '').slice(0, 12)
+  return new File([blob], `${base}_${uid}.webp`, { type: 'image/webp' })
 }
