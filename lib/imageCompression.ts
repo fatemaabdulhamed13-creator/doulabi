@@ -46,20 +46,32 @@ const THUMBNAIL_OPTIONS: Options = {
 // ── HEIC/HEIF normalisation ───────────────────────────────────────────────────
 
 /**
- * Returns true if the file is an Apple HEIC/HEIF image.
- * Checks both MIME type (unreliable on iOS — often empty or wrong) and extension.
+ * Returns true if the file needs HEIC→JPEG conversion before compression.
+ *
+ * iOS Safari frequently auto-converts HEIC to JPEG internally, but the File
+ * object keeps the original .HEIC filename. Checking the extension alone would
+ * pass a JPEG into heic2any, which crashes trying to parse it as HEIC.
+ *
+ * Rule: trust the MIME type when it is a known image type. Only fall back to
+ * the extension when the MIME type is absent ("") or a generic binary type —
+ * which is what some iOS/Android browsers report for unconverted HEIC files.
  */
 function isHeicFile(file: File): boolean {
   const mime = file.type.toLowerCase()
-  const ext  = file.name.toLowerCase()
-  return (
-    mime === 'image/heic'          ||
-    mime === 'image/heif'          ||
-    mime === 'image/heic-sequence' ||
-    mime === 'image/heif-sequence' ||
-    ext.endsWith('.heic')          ||
-    ext.endsWith('.heif')
-  )
+
+  // MIME type is present and specific — trust it completely
+  if (mime && mime !== 'application/octet-stream') {
+    return (
+      mime === 'image/heic'          ||
+      mime === 'image/heif'          ||
+      mime === 'image/heic-sequence' ||
+      mime === 'image/heif-sequence'
+    )
+  }
+
+  // MIME type absent or generic — fall back to extension
+  const ext = file.name.toLowerCase()
+  return ext.endsWith('.heic') || ext.endsWith('.heif')
 }
 
 /**

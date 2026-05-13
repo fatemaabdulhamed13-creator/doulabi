@@ -64,8 +64,8 @@ export default function SellForm() {
 
   const [images,      setImages]      = useState<File[]>([]);
   const [previews,    setPreviews]    = useState<string[]>([]);
-  // compressing[i] tracks 0-100 progress for each incoming file slot
   const [compressing, setCompressing] = useState<number[] | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const [title,       setTitle]       = useState("");
   const [price,       setPrice]       = useState("");
@@ -89,7 +89,7 @@ export default function SellForm() {
     const files = Array.from(e.target.files ?? []);
     if (!files.length) return;
 
-    // Initialise progress slots (0 % each) for the incoming batch
+    setUploadError(null);
     const progress = files.map(() => 0);
     setCompressing(progress);
 
@@ -109,6 +109,8 @@ export default function SellForm() {
       const newPreviews = compressed.map((f) => URL.createObjectURL(f));
       setImages((prev) => [...prev, ...compressed]);
       setPreviews((prev) => [...prev, ...newPreviews]);
+    } catch {
+      setUploadError("تعذّر معالجة الصورة. يرجى تجربة صورة أخرى أو التقاط صورة جديدة.");
     } finally {
       setCompressing(null);
       e.target.value = "";
@@ -562,7 +564,14 @@ export default function SellForm() {
           <input type="hidden" name="is_open_to_offers"  value={String(negotiable)} />
           <input type="hidden" name="delivery_available" value={String(deliveryAvail)} />
 
-          {/* ── Error ──────────────────────────────────────────────── */}
+          {/* ── Upload error (client-side compression failure) ─────── */}
+          {uploadError && (
+            <p className="text-sm text-red-500 text-center bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+              {uploadError}
+            </p>
+          )}
+
+          {/* ── Server action error ─────────────────────────────────── */}
           {state?.error && (
             <p className="text-sm text-red-500 text-center">{state.error}</p>
           )}
