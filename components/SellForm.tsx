@@ -110,13 +110,8 @@ export default function SellForm() {
       setImages((prev) => [...prev, ...compressed]);
       setPreviews((prev) => [...prev, ...newPreviews]);
     } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err)
-      console.error('[SellForm] image processing error:', detail)
-      setUploadError(
-        detail.includes('HEIC')
-          ? 'تعذّر تحويل صورة iPhone. جرّب التقاط صورة جديدة أو إرسالها كـ JPEG من تطبيق الصور.'
-          : 'تعذّر معالجة الصورة. يرجى تجربة صورة أخرى أو التقاط صورة جديدة.',
-      )
+      console.error('[SellForm] image processing error:', err)
+      setUploadError('تعذّر معالجة الصورة. يرجى تجربة صورة أخرى أو التقاط صورة جديدة.')
     } finally {
       setCompressing(null);
       e.target.value = "";
