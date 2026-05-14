@@ -5,7 +5,18 @@ import { Camera, ChevronDown, Loader2, ShieldAlert, X } from "lucide-react";
 import { createListingAction } from "@/app/actions/product";
 import PageHeader from "@/components/PageHeader";
 import { SUB_CATEGORIES } from "@/lib/subcategories";
-import { compressListingImages } from "@/lib/imageCompression";
+import { createClient } from "@/lib/supabase/client";
+
+/** Per-file ceiling for raw uploads — well above what an iPhone 48 MP JPEG produces. */
+const MAX_RAW_FILE_BYTES = 20 * 1024 * 1024; // 20 MB
+
+/** A single image staged for upload. The raw path is null while the upload is in flight. */
+type ImageEntry = {
+  preview: string;
+  rawPath: string | null;
+  uploading: boolean;
+  error: boolean;
+};
 
 /* ── Data ────────────────────────────────────────────────────────────────── */
 
@@ -62,9 +73,7 @@ const pill = (active: boolean) =>
 export default function SellForm() {
   const [state, formAction, pending] = useActionState(createListingAction, null);
 
-  const [images,      setImages]      = useState<File[]>([]);
-  const [previews,    setPreviews]    = useState<string[]>([]);
-  const [compressing, setCompressing] = useState<number[] | null>(null);
+  const [entries,     setEntries]     = useState<ImageEntry[]>([]);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   const [title,       setTitle]       = useState("");
@@ -81,47 +90,90 @@ export default function SellForm() {
   const [description, setDescription] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const supabaseRef = useRef(createClient());
 
-  /** Returns true while at least one file is still being compressed. */
-  const isCompressing = compressing !== null && compressing.some((p) => p < 100);
+  /** True while at least one image is still streaming to Supabase Storage. */
+  const isUploading = entries.some((e) => e.uploading);
 
   async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
+    e.target.value = "";
     if (!files.length) return;
 
     setUploadError(null);
-    const progress = files.map(() => 0);
-    setCompressing(progress);
 
-    try {
-      const compressed = await compressListingImages(
-        files,
-        (fileIdx, pct) => {
-          setCompressing((prev) => {
-            if (!prev) return prev;
-            const next = [...prev];
-            next[fileIdx] = pct;
-            return next;
-          });
-        },
-      );
-
-      const newPreviews = compressed.map((f) => URL.createObjectURL(f));
-      setImages((prev) => [...prev, ...compressed]);
-      setPreviews((prev) => [...prev, ...newPreviews]);
-    } catch (err) {
-      console.error('[SellForm] image processing error:', err)
-      setUploadError('تعذّر معالجة الصورة. يرجى تجربة صورة أخرى أو التقاط صورة جديدة.')
-    } finally {
-      setCompressing(null);
-      e.target.value = "";
+    // Cheap client-side gate so we don't try to push absurd files.
+    const oversized = files.find((f) => f.size > MAX_RAW_FILE_BYTES);
+    if (oversized) {
+      setUploadError(`حجم الصورة كبير جداً (${(oversized.size / 1024 / 1024).toFixed(1)} MB). الحد الأقصى 20 ميغابايت.`);
+      return;
     }
+
+    const supabase = supabaseRef.current;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setUploadError("انتهت الجلسة. يرجى تسجيل الدخول مرة أخرى.");
+      return;
+    }
+
+    // Add placeholders immediately so the user sees thumbnails right away.
+    const baseIndex = entries.length;
+    const placeholders: ImageEntry[] = files.map((f) => ({
+      preview:   URL.createObjectURL(f),
+      rawPath:   null,
+      uploading: true,
+      error:     false,
+    }));
+    setEntries((prev) => [...prev, ...placeholders]);
+
+    // Kick off uploads in parallel. iOS streams the bytes; no decode, no canvas — safe.
+    await Promise.all(files.map(async (file, i) => {
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+      const safeExt = ["jpg", "jpeg", "png", "webp"].includes(ext) ? ext : "jpg";
+      const uid = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+      const rawPath = `raw/${user.id}/${uid}.${safeExt}`;
+
+      const { error } = await supabase.storage
+        .from("product-images")
+        .upload(rawPath, file, {
+          contentType: file.type || "image/jpeg",
+          upsert: false,
+        });
+
+      setEntries((prev) => {
+        const next = [...prev];
+        const slot = baseIndex + i;
+        if (!next[slot]) return prev;
+        next[slot] = error
+          ? { ...next[slot], uploading: false, error: true,  rawPath: null    }
+          : { ...next[slot], uploading: false, error: false, rawPath          };
+        return next;
+      });
+
+      if (error) {
+        console.error("[SellForm] storage upload error:", error);
+        setUploadError("تعذّر رفع الصورة. تحقق من اتصال الإنترنت ثم حاول مرة أخرى.");
+      }
+    }));
   }
 
   function removeImage(index: number) {
-    URL.revokeObjectURL(previews[index]);
-    setImages((prev) => prev.filter((_, i) => i !== index));
-    setPreviews((prev) => prev.filter((_, i) => i !== index));
+    setEntries((prev) => {
+      const target = prev[index];
+      if (!target) return prev;
+      URL.revokeObjectURL(target.preview);
+
+      // Fire-and-forget cleanup of the raw temp file. If it fails (e.g. RLS),
+      // the server-side cron sweeper picks it up later.
+      if (target.rawPath) {
+        supabaseRef.current.storage
+          .from("product-images")
+          .remove([target.rawPath])
+          .catch(() => { /* ignored */ });
+      }
+
+      return prev.filter((_, i) => i !== index);
+    });
   }
 
   const isOneSize = category === "حقائب" || category === "إكسسوارات";
@@ -138,10 +190,17 @@ export default function SellForm() {
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    if (isUploading) {
+      setUploadError("يرجى الانتظار حتى انتهاء رفع الصور.");
+      return;
+    }
+
     const fd = new FormData(e.currentTarget);
-    // Inject compressed images — the hidden file input has no name so it
-    // won't duplicate here; we append the already-processed File objects.
-    images.forEach((f) => fd.append("images", f));
+    // Send only the raw storage paths — bytes already live in Supabase.
+    entries.forEach((entry) => {
+      if (entry.rawPath) fd.append("raw_paths", entry.rawPath);
+    });
     startTransition(() => formAction(fd));
   }
 
@@ -173,54 +232,27 @@ export default function SellForm() {
 
           <label
             htmlFor="image-upload"
-            onClick={() => !isCompressing && fileInputRef.current?.click()}
-            aria-disabled={isCompressing}
-            className={`
+            onClick={() => fileInputRef.current?.click()}
+            className="
               relative w-full aspect-video rounded-2xl
               border-2 border-dashed border-border bg-muted
               flex flex-col items-center justify-center gap-3
               transition-all duration-200
-              ${isCompressing
-                ? "cursor-not-allowed opacity-70"
-                : "hover:border-primary/50 hover:bg-primary/5 cursor-pointer"
-              }
-            `}
+              hover:border-primary/50 hover:bg-primary/5 cursor-pointer
+            "
           >
-            {isCompressing ? (
-              /* ── Compression in-progress overlay ── */
-              <div className="flex flex-col items-center gap-3 px-6 w-full">
-                <Loader2 className="h-7 w-7 text-primary animate-spin" />
-                <p className="text-sm font-semibold text-foreground">جاري ضغط الصور…</p>
-                {compressing && (
-                  <div className="w-full space-y-1.5 mt-1">
-                    {compressing.map((pct, idx) => (
-                      <div key={idx} className="w-full">
-                        <div className="flex justify-between text-[11px] text-muted-foreground mb-0.5">
-                          <span>صورة {idx + 1}</span>
-                          <span>{pct}%</span>
-                        </div>
-                        <div className="w-full h-1.5 rounded-full bg-muted-foreground/20 overflow-hidden">
-                          <div
-                            className="h-full rounded-full bg-primary transition-all duration-200"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              /* ── Default idle state ── */
-              <>
-                <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
-                  <Camera className="h-7 w-7 text-primary" />
-                </div>
-                <div className="text-center">
-                  <p className="text-sm font-semibold text-foreground">رفع صور المنتج</p>
-                  <p className="text-xs text-muted-foreground mt-1">اضغط لإضافة حتى ٨ صور</p>
-                </div>
-              </>
+            <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
+              <Camera className="h-7 w-7 text-primary" />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-foreground">رفع صور المنتج</p>
+              <p className="text-xs text-muted-foreground mt-1">اضغط لإضافة حتى ٨ صور</p>
+            </div>
+            {isUploading && (
+              <p className="text-xs font-medium text-primary mt-1 flex items-center gap-1.5">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                جاري رفع الصور…
+              </p>
             )}
           </label>
 
@@ -238,16 +270,29 @@ export default function SellForm() {
             </div>
           </div>
 
-          {previews.length > 0 && (
+          {entries.length > 0 && (
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 mt-3">
-              {previews.map((src, i) => (
+              {entries.map((entry, i) => (
                 <div key={i} className="relative aspect-square rounded-xl overflow-hidden">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={src}
+                    src={entry.preview}
                     alt=""
-                    className="w-full h-full object-cover"
+                    className={`w-full h-full object-cover ${entry.uploading ? "opacity-60" : ""}`}
                   />
+
+                  {entry.uploading && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                      <Loader2 className="h-6 w-6 text-white animate-spin" />
+                    </div>
+                  )}
+
+                  {entry.error && !entry.uploading && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-red-500/40 text-white text-[11px] font-bold text-center px-2">
+                      فشل الرفع
+                    </div>
+                  )}
+
                   <button
                     type="button"
                     onClick={() => removeImage(i)}
@@ -580,7 +625,7 @@ export default function SellForm() {
           {/* ── Submit ─────────────────────────────────────────────── */}
           <button
             type="submit"
-            disabled={pending || isCompressing}
+            disabled={pending || isUploading}
             className="
               w-full py-4 rounded-2xl mt-2
               bg-primary text-white font-bold text-[15px]
@@ -589,10 +634,10 @@ export default function SellForm() {
               shadow-[0_4px_24px_rgba(93,42,66,0.40)]
             "
           >
-            {isCompressing
-              ? "جاري ضغط الصور…"
+            {isUploading
+              ? "جاري رفع الصور…"
               : pending
-              ? "جاري الرفع..."
+              ? "جاري المعالجة والنشر…"
               : "نشر الإعلان"
             }
           </button>

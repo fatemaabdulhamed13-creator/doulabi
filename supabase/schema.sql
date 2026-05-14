@@ -128,3 +128,14 @@ create policy "storage_insert_authenticated"
     bucket_id = 'product-images'
     and auth.role() = 'authenticated'
   );
+
+-- Storage: users may delete their own raw temp uploads (raw/{auth.uid}/*).
+-- Final processed images are admin-only.
+create policy "storage_delete_own_raw"
+  on storage.objects for delete
+  using (
+    bucket_id = 'product-images'
+    and auth.role() = 'authenticated'
+    and (storage.foldername(name))[1] = 'raw'
+    and (storage.foldername(name))[2] = auth.uid()::text
+  );

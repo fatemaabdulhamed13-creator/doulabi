@@ -2,15 +2,25 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import sharp from 'sharp'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import {
   publishListingSchema,
   draftListingSchema,
-  ACCEPTED_IMAGE_TYPES,
-  MAX_RAW_FILE_SIZE_BYTES,
 } from '@/lib/listingSchema'
 
 export type ListingState = { error: string } | null
+
+/** Bucket where temp raw uploads and final processed images both live. */
+const STORAGE_BUCKET = 'product-images'
+
+/** Path prefix the client uses for raw, pre-processed uploads. */
+const RAW_PREFIX = 'raw/'
+
+/** Server-side compression target (matches old client-side settings). */
+const MAX_DIMENSION = 1200
+const WEBP_QUALITY  = 80
 
 export async function createListingAction(
   _prevState: ListingState,
@@ -24,19 +34,11 @@ export async function createListingAction(
   // ── Determine intent: publish (live listing) vs. draft ────────────────────
   const isDraft = formData.get('intent') === 'draft'
 
-  // ── Collect & pre-flight-check raw files ─────────────────────────────────
-  const files = (formData.getAll('images') as File[]).filter((f) => f.size > 0)
-
-  for (const file of files) {
-    // Server-side file-type guard (second layer after client validation)
-    if (!ACCEPTED_IMAGE_TYPES.includes(file.type as (typeof ACCEPTED_IMAGE_TYPES)[number])) {
-      return { error: 'نوع الملف غير مدعوم. يُقبل: JPEG، PNG، WebP فقط.' }
-    }
-    // Server-side size guard (images must already be compressed, but keep the cap)
-    if (file.size > MAX_RAW_FILE_SIZE_BYTES) {
-      return { error: 'حجم الصورة كبير جداً. الحد الأقصى 15 ميغابايت لكل صورة.' }
-    }
-  }
+  // ── Collect the raw-upload paths produced by the browser ─────────────────
+  const rawPaths = formData
+    .getAll('raw_paths')
+    .map((v) => String(v).trim())
+    .filter((p) => p.startsWith(`${RAW_PREFIX}${user.id}/`))
 
   // ── Parse & validate form fields with Zod ────────────────────────────────
   const rawData = {
@@ -53,7 +55,7 @@ export async function createListingAction(
     color:              String(formData.get('color') ?? '').trim() || undefined,
     city:               String(formData.get('city')  ?? '').trim() || undefined,
     subcategory:        String(formData.get('subcategory') ?? '').trim() || undefined,
-    imageCount:         files.length,
+    imageCount:         rawPaths.length,
   }
 
   // Drafts allow 0 images; published listings require ≥ 3.
@@ -61,7 +63,6 @@ export async function createListingAction(
   const parsed = schema.safeParse(rawData)
 
   if (!parsed.success) {
-    // Return the first validation error in Arabic.
     const firstError = parsed.error.issues[0]?.message ?? 'يرجى تعبئة جميع الحقول المطلوبة.'
     return { error: firstError }
   }
@@ -71,32 +72,69 @@ export async function createListingAction(
     description, is_open_to_offers, delivery_available, color, city, subcategory,
   } = parsed.data
 
-  // ── Upload images ─────────────────────────────────────────────────────────
+  // ── Server-side image processing ──────────────────────────────────────────
+  // We use the admin client for download/process/upload/cleanup so we can
+  // bypass RLS (which has no delete policy) without forcing the user to send
+  // huge raw files through a Vercel function body limit.
+  const admin = createAdminClient()
   const image_urls: string[] = []
 
-  for (let i = 0; i < files.length; i++) {
-    const file = files[i]
-    // Use the clean .webp filename produced by the client compression utility.
-    // Fall back to a timestamp-based name if the file somehow lacks one.
-    const safeName =
-      file.name?.replace(/[^a-zA-Z0-9_.-]/g, '_') || `${Date.now()}-${i}.webp`
-    const path = `${user.id}/${i}_${safeName}`
+  for (let i = 0; i < rawPaths.length; i++) {
+    const rawPath = rawPaths[i]
 
-    const { error: uploadError } = await supabase.storage
-      .from('product-images')
-      .upload(path, file, { contentType: 'image/webp', upsert: false })
+    // 1. Download the raw bytes the browser uploaded to temp.
+    const { data: rawBlob, error: dlError } = await admin.storage
+      .from(STORAGE_BUCKET)
+      .download(rawPath)
 
-    if (uploadError) return { error: `فشل رفع الصورة: ${uploadError.message}` }
+    if (dlError || !rawBlob) {
+      return { error: `تعذّر قراءة الصورة من التخزين: ${dlError?.message ?? 'unknown'}` }
+    }
 
-    const { data: { publicUrl } } = supabase.storage
-      .from('product-images')
-      .getPublicUrl(path)
+    const inputBuffer = Buffer.from(await rawBlob.arrayBuffer())
+
+    // 2. Resize + encode to WebP via Sharp. EXIF/GPS metadata is stripped by default.
+    let outputBuffer: Buffer
+    try {
+      outputBuffer = await sharp(inputBuffer, { failOn: 'none' })
+        .rotate() // honour EXIF orientation before stripping
+        .resize({
+          width: MAX_DIMENSION,
+          height: MAX_DIMENSION,
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
+        .webp({ quality: WEBP_QUALITY })
+        .toBuffer()
+    } catch (err) {
+      return {
+        error: `تعذّر معالجة الصورة رقم ${i + 1}: ${err instanceof Error ? err.message : 'unknown'}`,
+      }
+    }
+
+    // 3. Upload the processed WebP to the user's final folder.
+    const finalPath = `${user.id}/${cryptoRandomId()}.webp`
+    const { error: upError } = await admin.storage
+      .from(STORAGE_BUCKET)
+      .upload(finalPath, outputBuffer, {
+        contentType: 'image/webp',
+        upsert: false,
+      })
+
+    if (upError) return { error: `فشل رفع الصورة: ${upError.message}` }
+
+    const { data: { publicUrl } } = admin.storage
+      .from(STORAGE_BUCKET)
+      .getPublicUrl(finalPath)
 
     image_urls.push(publicUrl)
+
+    // 4. Clean up the raw temp file. Failure here is non-fatal — a cron can
+    //    sweep orphans later — so we don't error the whole request.
+    await admin.storage.from(STORAGE_BUCKET).remove([rawPath])
   }
 
   // ── Insert product ────────────────────────────────────────────────────────
-  // Drafts are stored with status='draft'; published listings use 'pending' (admin review).
   const status = isDraft ? 'draft' : 'pending'
 
   const { error: insertError } = await supabase
@@ -123,6 +161,11 @@ export async function createListingAction(
   if (insertError) return { error: insertError.message }
 
   redirect('/profile?listing_posted=1')
+}
+
+/** Short random id for object names. */
+function cryptoRandomId(): string {
+  return globalThis.crypto.randomUUID().replace(/-/g, '').slice(0, 16)
 }
 
 /* ── Seller actions ──────────────────────────────────────────────────────── */
