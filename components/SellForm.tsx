@@ -166,7 +166,7 @@ export default function SellForm() {
             ref={fileInputRef}
             type="file"
             multiple
-            accept="image/*, .heic, .heif"
+            accept="image/jpeg, image/png, image/webp"
             className="hidden"
             onChange={handleImageChange}
           />
