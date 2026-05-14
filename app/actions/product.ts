@@ -26,141 +26,171 @@ export async function createListingAction(
   _prevState: ListingState,
   formData: FormData,
 ): Promise<ListingState> {
-  const supabase = await createClient()
+  let shouldRedirect = false
 
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError || !user) return { error: 'يجب تسجيل الدخول أولاً.' }
+  try {
+    const supabase = await createClient()
 
-  // ── Determine intent: publish (live listing) vs. draft ────────────────────
-  const isDraft = formData.get('intent') === 'draft'
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) return { error: 'يجب تسجيل الدخول أولاً.' }
 
-  // ── Collect the raw-upload paths produced by the browser ─────────────────
-  const rawPaths = formData
-    .getAll('raw_paths')
-    .map((v) => String(v).trim())
-    .filter((p) => p.startsWith(`${RAW_PREFIX}${user.id}/`))
+    // ── Determine intent: publish (live listing) vs. draft ────────────────
+    const isDraft = formData.get('intent') === 'draft'
 
-  // ── Parse & validate form fields with Zod ────────────────────────────────
-  const rawData = {
-    title:              String(formData.get('title')        ?? '').trim(),
-    price:              formData.get('price'),
-    category:           String(formData.get('category')    ?? '').trim(),
-    brand:              String(formData.get('brand')        ?? '').trim(),
-    size_type:          String(formData.get('size_type')   ?? '').trim(),
-    size_value:         String(formData.get('size_value')  ?? '').trim(),
-    condition:          String(formData.get('condition')   ?? '').trim(),
-    description:        String(formData.get('description') ?? '').trim() || undefined,
-    is_open_to_offers:  formData.get('is_open_to_offers')  === 'true',
-    delivery_available: formData.get('delivery_available') === 'true',
-    color:              String(formData.get('color') ?? '').trim() || undefined,
-    city:               String(formData.get('city')  ?? '').trim() || undefined,
-    subcategory:        String(formData.get('subcategory') ?? '').trim() || undefined,
-    imageCount:         rawPaths.length,
-  }
+    // ── Collect the raw-upload paths produced by the browser ──────────────
+    const rawPaths = formData
+      .getAll('raw_paths')
+      .map((v) => String(v).trim())
+      .filter((p) => p.startsWith(`${RAW_PREFIX}${user.id}/`))
 
-  // Drafts allow 0 images; published listings require ≥ 3.
-  const schema = isDraft ? draftListingSchema : publishListingSchema
-  const parsed = schema.safeParse(rawData)
-
-  if (!parsed.success) {
-    const firstError = parsed.error.issues[0]?.message ?? 'يرجى تعبئة جميع الحقول المطلوبة.'
-    return { error: firstError }
-  }
-
-  const {
-    title, price, category, brand, size_type, size_value, condition,
-    description, is_open_to_offers, delivery_available, color, city, subcategory,
-  } = parsed.data
-
-  // ── Server-side image processing ──────────────────────────────────────────
-  // We use the admin client for download/process/upload/cleanup so we can
-  // bypass RLS (which has no delete policy) without forcing the user to send
-  // huge raw files through a Vercel function body limit.
-  const admin = createAdminClient()
-  const image_urls: string[] = []
-
-  for (let i = 0; i < rawPaths.length; i++) {
-    const rawPath = rawPaths[i]
-
-    // 1. Download the raw bytes the browser uploaded to temp.
-    const { data: rawBlob, error: dlError } = await admin.storage
-      .from(STORAGE_BUCKET)
-      .download(rawPath)
-
-    if (dlError || !rawBlob) {
-      return { error: `تعذّر قراءة الصورة من التخزين: ${dlError?.message ?? 'unknown'}` }
+    // ── Parse & validate form fields with Zod ─────────────────────────────
+    const rawData = {
+      title:              String(formData.get('title')        ?? '').trim(),
+      price:              formData.get('price'),
+      category:           String(formData.get('category')    ?? '').trim(),
+      brand:              String(formData.get('brand')        ?? '').trim(),
+      size_type:          String(formData.get('size_type')   ?? '').trim(),
+      size_value:         String(formData.get('size_value')  ?? '').trim(),
+      condition:          String(formData.get('condition')   ?? '').trim(),
+      description:        String(formData.get('description') ?? '').trim() || undefined,
+      is_open_to_offers:  formData.get('is_open_to_offers')  === 'true',
+      delivery_available: formData.get('delivery_available') === 'true',
+      color:              String(formData.get('color') ?? '').trim() || undefined,
+      city:               String(formData.get('city')  ?? '').trim() || undefined,
+      subcategory:        String(formData.get('subcategory') ?? '').trim() || undefined,
+      imageCount:         rawPaths.length,
     }
 
-    const inputBuffer = Buffer.from(await rawBlob.arrayBuffer())
+    const schema = isDraft ? draftListingSchema : publishListingSchema
+    const parsed = schema.safeParse(rawData)
 
-    // 2. Resize + encode to WebP via Sharp. EXIF/GPS metadata is stripped by default.
-    let outputBuffer: Buffer
-    try {
-      outputBuffer = await sharp(inputBuffer, { failOn: 'none' })
-        .rotate() // honour EXIF orientation before stripping
-        .resize({
-          width: MAX_DIMENSION,
-          height: MAX_DIMENSION,
-          fit: 'inside',
-          withoutEnlargement: true,
-        })
-        .webp({ quality: WEBP_QUALITY })
-        .toBuffer()
-    } catch (err) {
-      return {
-        error: `تعذّر معالجة الصورة رقم ${i + 1}: ${err instanceof Error ? err.message : 'unknown'}`,
-      }
+    if (!parsed.success) {
+      const firstError = parsed.error.issues[0]?.message ?? 'يرجى تعبئة جميع الحقول المطلوبة.'
+      return { error: firstError }
     }
 
-    // 3. Upload the processed WebP to the user's final folder.
-    const finalPath = `${user.id}/${cryptoRandomId()}.webp`
-    const { error: upError } = await admin.storage
-      .from(STORAGE_BUCKET)
-      .upload(finalPath, outputBuffer, {
-        contentType: 'image/webp',
-        upsert: false,
+    const {
+      title, price, category, brand, size_type, size_value, condition,
+      description, is_open_to_offers, delivery_available, color, city, subcategory,
+    } = parsed.data
+
+    // ── Service-role check — fail loud rather than crashing on a null env ─
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return { error: 'تكوين الخادم غير مكتمل (مفتاح الخدمة مفقود).' }
+    }
+
+    // ── Process images in parallel ────────────────────────────────────────
+    // Sequential processing was risking Vercel's 10-second function timeout
+    // on listings with 5+ photos. Parallel keeps total time bounded by the
+    // single-slowest image instead of the sum.
+    const admin = createAdminClient()
+    const results = await Promise.all(
+      rawPaths.map((rawPath, i) => processOneImage(admin, user.id, rawPath, i)),
+    )
+
+    const firstError = results.find((r) => 'error' in r) as { error: string } | undefined
+    if (firstError) return { error: firstError.error }
+
+    const image_urls = results.map((r) => (r as { url: string }).url)
+
+    // ── Insert product ────────────────────────────────────────────────────
+    const status = isDraft ? 'draft' : 'pending'
+
+    const { error: insertError } = await supabase
+      .from('products')
+      .insert({
+        seller_id: user.id,
+        title,
+        price,
+        category,
+        brand,
+        size_type,
+        size_value,
+        condition,
+        description: description ?? null,
+        is_open_to_offers,
+        delivery_available,
+        color:       color       ?? null,
+        city:        city        ?? null,
+        subcategory: subcategory ?? null,
+        image_urls,
+        status,
       })
 
-    if (upError) return { error: `فشل رفع الصورة: ${upError.message}` }
+    if (insertError) return { error: `تعذّر إنشاء الإعلان: ${insertError.message}` }
 
-    const { data: { publicUrl } } = admin.storage
-      .from(STORAGE_BUCKET)
-      .getPublicUrl(finalPath)
-
-    image_urls.push(publicUrl)
-
-    // 4. Clean up the raw temp file. Failure here is non-fatal — a cron can
-    //    sweep orphans later — so we don't error the whole request.
-    await admin.storage.from(STORAGE_BUCKET).remove([rawPath])
+    shouldRedirect = true
+  } catch (err) {
+    console.error('[createListingAction] unhandled error:', err)
+    const detail = err instanceof Error ? err.message : String(err)
+    return { error: `حدث خطأ غير متوقع: ${detail}` }
   }
 
-  // ── Insert product ────────────────────────────────────────────────────────
-  const status = isDraft ? 'draft' : 'pending'
+  // redirect() throws internally — must run OUTSIDE the try/catch.
+  if (shouldRedirect) redirect('/profile?listing_posted=1')
+  return null
+}
 
-  const { error: insertError } = await supabase
-    .from('products')
-    .insert({
-      seller_id: user.id,
-      title,
-      price,
-      category,
-      brand,
-      size_type,
-      size_value,
-      condition,
-      description: description ?? null,
-      is_open_to_offers,
-      delivery_available,
-      color:       color       ?? null,
-      city:        city        ?? null,
-      subcategory: subcategory ?? null,
-      image_urls,
-      status,
+/**
+ * Download → Sharp resize/WebP → upload → delete temp.
+ * Returns the public URL of the processed image or an Arabic error message.
+ */
+async function processOneImage(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  rawPath: string,
+  index: number,
+): Promise<{ url: string } | { error: string }> {
+  // 1. Download raw bytes.
+  const { data: rawBlob, error: dlError } = await admin.storage
+    .from(STORAGE_BUCKET)
+    .download(rawPath)
+
+  if (dlError || !rawBlob) {
+    return { error: `تعذّر قراءة الصورة رقم ${index + 1} من التخزين: ${dlError?.message ?? 'unknown'}` }
+  }
+
+  const inputBuffer = Buffer.from(await rawBlob.arrayBuffer())
+
+  // 2. Resize + encode to WebP. EXIF/GPS stripped by default; .rotate() first
+  //    so we honour orientation BEFORE the metadata is dropped.
+  let outputBuffer: Buffer
+  try {
+    outputBuffer = await sharp(inputBuffer, { failOn: 'none' })
+      .rotate()
+      .resize({
+        width: MAX_DIMENSION,
+        height: MAX_DIMENSION,
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .webp({ quality: WEBP_QUALITY })
+      .toBuffer()
+  } catch (err) {
+    return {
+      error: `تعذّر معالجة الصورة رقم ${index + 1}: ${err instanceof Error ? err.message : 'unknown'}`,
+    }
+  }
+
+  // 3. Upload processed WebP.
+  const finalPath = `${userId}/${cryptoRandomId()}.webp`
+  const { error: upError } = await admin.storage
+    .from(STORAGE_BUCKET)
+    .upload(finalPath, outputBuffer, {
+      contentType: 'image/webp',
+      upsert: false,
     })
 
-  if (insertError) return { error: insertError.message }
+  if (upError) return { error: `فشل رفع الصورة رقم ${index + 1}: ${upError.message}` }
 
-  redirect('/profile?listing_posted=1')
+  const { data: { publicUrl } } = admin.storage
+    .from(STORAGE_BUCKET)
+    .getPublicUrl(finalPath)
+
+  // 4. Clean up temp — non-fatal if it fails.
+  admin.storage.from(STORAGE_BUCKET).remove([rawPath]).catch(() => { /* ignore */ })
+
+  return { url: publicUrl }
 }
 
 /** Short random id for object names. */
