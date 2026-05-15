@@ -251,6 +251,20 @@ export async function approveProductAction(productId: string, _?: FormData) {
   revalidatePath('/')
 }
 
+export async function approveProductWithImagesAction(productId: string, imageUrls: string[]) {
+  const supabase = await requireAdmin()
+
+  const { error } = await supabase
+    .from('products')
+    .update({ status: 'approved', image_urls: imageUrls })
+    .eq('id', productId)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/admin')
+  revalidatePath('/')
+}
+
 export async function rejectProductAction(productId: string, _?: FormData) {
   const supabase = await requireAdmin()
 

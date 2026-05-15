@@ -1,16 +1,14 @@
 "use client";
 
-import { startTransition, useActionState, useRef, useState } from "react";
-import { Camera, ChevronDown, Loader2, ShieldAlert, X } from "lucide-react";
+import { startTransition, useActionState, useEffect, useRef, useState } from "react";
+import { Camera, ChevronDown, Loader2, Search, ShieldAlert, X } from "lucide-react";
 import { createListingAction } from "@/app/actions/product";
 import PageHeader from "@/components/PageHeader";
 import { SUB_CATEGORIES } from "@/lib/subcategories";
 import { createClient } from "@/lib/supabase/client";
 
-/** Per-file ceiling for raw uploads — well above what an iPhone 48 MP JPEG produces. */
-const MAX_RAW_FILE_BYTES = 20 * 1024 * 1024; // 20 MB
+const MAX_RAW_FILE_BYTES = 20 * 1024 * 1024;
 
-/** A single image staged for upload. The raw path is null while the upload is in flight. */
 type ImageEntry = {
   preview: string;
   rawPath: string | null;
@@ -32,26 +30,91 @@ const CLOTHING_NUM_SIZES = Array.from({ length: 12 }, (_, i) => String(34 + i * 
 const SHOE_SIZES = Array.from({ length: 10 }, (_, i) => String(36 + i));
 
 const BRANDS = [
-  { value: "Zara",         label: "زارا"       },
-  { value: "Monsoon",      label: "مونسون"     },
-  { value: "Dune",         label: "ديون"       },
-  { value: "Sherri Hill",  label: "شيري هيل"   },
-  { value: "Michael Kors", label: "مايكل كورس" },
-  { value: "Gizia",        label: "جيزيا"      },
-  { value: "Other",        label: "أخرى"       },
+  { value: "Adidas",          label: "أديداس"           },
+  { value: "Aldo",            label: "ألدو"              },
+  { value: "Armani",          label: "أرماني"            },
+  { value: "ASOS",            label: "ASOS"              },
+  { value: "Badgley Mischka", label: "بادجلي ميشكا"     },
+  { value: "Balenciaga",      label: "بالنسياغا"        },
+  { value: "Bershka",         label: "بيرشكا"           },
+  { value: "Burberry",        label: "بربري"            },
+  { value: "Calvin Klein",    label: "كالفن كلاين"     },
+  { value: "Carter's",        label: "كارتر"            },
+  { value: "Chanel",          label: "شانيل"            },
+  { value: "Champion",        label: "تشامبيون"         },
+  { value: "Coast",           label: "كوست"             },
+  { value: "Coach",           label: "كوتش"             },
+  { value: "Defacto",         label: "ديفاكتو"          },
+  { value: "Dior",            label: "ديور"             },
+  { value: "DKNY",            label: "DKNY"             },
+  { value: "Dune",            label: "ديون"             },
+  { value: "Fendi",           label: "فندي"             },
+  { value: "Fossil",          label: "فوسيل"            },
+  { value: "Gap",             label: "GAP"              },
+  { value: "Gizia",           label: "جيزيا"            },
+  { value: "Gucci",           label: "غوتشي"            },
+  { value: "Guess",           label: "غيس"              },
+  { value: "H&M",             label: "H&M"              },
+  { value: "Karen Millen",    label: "كارن ميلن"       },
+  { value: "Kate Spade",      label: "كيت سبيد"        },
+  { value: "Lacoste",         label: "لاكوست"           },
+  { value: "LC Waikiki",      label: "LC Waikiki"       },
+  { value: "Levi's",          label: "ليفايز"           },
+  { value: "Louis Vuitton",   label: "لويس فيتون"      },
+  { value: "Mango",           label: "مانجو"            },
+  { value: "Marks & Spencer", label: "ماركس أند سبنسر" },
+  { value: "Massimo Dutti",   label: "ماسيمو دوتي"     },
+  { value: "Michael Kors",    label: "مايكل كورس"      },
+  { value: "Monsoon",         label: "مونسون"           },
+  { value: "Mothercare",      label: "مازر كير"         },
+  { value: "New Balance",     label: "نيو بالانس"       },
+  { value: "Next",            label: "نكست"             },
+  { value: "Nike",            label: "نايك"             },
+  { value: "Nine West",       label: "ناين ويست"       },
+  { value: "Pandora",         label: "باندورا"          },
+  { value: "Polo",            label: "بولو"             },
+  { value: "Prada",           label: "برادا"            },
+  { value: "Pull & Bear",     label: "بول أند بير"     },
+  { value: "Puma",            label: "بوما"             },
+  { value: "Rado",            label: "رادو"             },
+  { value: "Ralph Lauren",    label: "رالف لورن"        },
+  { value: "Reebok",          label: "ريبوك"            },
+  { value: "River Island",    label: "ريفر أيلاند"     },
+  { value: "Sherri Hill",     label: "شيري هيل"         },
+  { value: "Steve Madden",    label: "ستيف مادن"        },
+  { value: "Stradivarius",    label: "ستراديفاريوس"    },
+  { value: "Swarovski",       label: "سواروفسكي"       },
+  { value: "Ted Baker",        label: "تيد بيكر"         },
+  { value: "Tommy Hilfiger",  label: "تومي هيلفيغر"   },
+  { value: "Tory Burch",      label: "توري بيرش"       },
+  { value: "Under Armour",    label: "أندر آرمور"      },
+  { value: "Valentino",       label: "فالنتينو"         },
+  { value: "Versace",         label: "فيرساتشي"         },
+  { value: "Zara",            label: "زارا"             },
+  // Pinned — Custom Made is always a pill; Other is pinned to combobox bottom
+  { value: "Custom Made",     label: "تفصيل"            },
+  { value: "Other",           label: "أخرى"             },
 ];
 
-const COLORS = [
-  "أسود", "أبيض", "رمادي", "بيج", "بني",
-  "أزرق", "أخضر", "أحمر", "وردي", "برتقالي",
-  "أصفر", "بنفسجي", "ذهبي", "فضي", "متعدد الألوان",
-];
+const CATEGORY_FEATURED_BRANDS: Record<string, string[]> = {
+  "فساتين":         ["Zara", "Sherri Hill", "Gizia", "Monsoon", "Mango", "H&M"],
+  "أحذية":          ["Dune", "Steve Madden", "Zara", "Aldo", "Nine West", "Michael Kors"],
+  "حقائب":          ["Michael Kors", "Coach", "Louis Vuitton", "Zara", "Kate Spade", "Guess"],
+  "إكسسوارات":     ["Swarovski", "Pandora", "Michael Kors", "DKNY", "Rado", "Fossil"],
+  "ملابس رجالية":  ["Zara", "Ralph Lauren", "Tommy Hilfiger", "Lacoste", "Calvin Klein", "H&M"],
+  "ملابس أطفال":   ["Zara", "H&M", "Next", "Marks & Spencer", "Mothercare", "Carter's"],
+  "ملابس رياضية":  ["Nike", "Adidas", "Puma", "Under Armour", "Reebok", "Champion"],
+  "ملابس تقليدية": ["Gizia", "Zara", "Mango"],
+  "أخرى":           ["Zara", "H&M", "Mango", "Gizia", "Monsoon", "Michael Kors"],
+};
 
-const CITIES = [
-  "طرابلس", "بنغازي", "مصراتة", "الزاوية", "البيضاء",
-  "سبها", "الزنتان", "زوارة", "غريان", "ترهونة",
-  "الخمس", "سرت", "درنة", "توبرق",
-];
+const BRANDS_MAP = Object.fromEntries(BRANDS.map((b) => [b.value, b]));
+const OTHER_BRAND = BRANDS_MAP["Other"];
+
+// Full alphabetical list for the combobox — Custom Made and Other are excluded (handled separately)
+const SEARCHABLE_BRANDS = BRANDS
+  .filter((b) => b.value !== "Custom Made" && b.value !== "Other")
+  .sort((a, b) => a.label.localeCompare(b.label, "ar"));
 
 /* ── Shared styles ───────────────────────────────────────────────────────── */
 
@@ -73,28 +136,51 @@ const pill = (active: boolean) =>
 export default function SellForm() {
   const [state, formAction, pending] = useActionState(createListingAction, null);
 
-  const [entries,     setEntries]     = useState<ImageEntry[]>([]);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [entries,      setEntries]      = useState<ImageEntry[]>([]);
+  const [uploadError,  setUploadError]  = useState<string | null>(null);
 
-  const [title,       setTitle]       = useState("");
-  const [price,       setPrice]       = useState("");
-  const [negotiable,  setNegotiable]  = useState(false);
-  const [category,    setCategory]    = useState("");
-  const [subcategory, setSubcategory] = useState("");
-  const [brand,       setBrand]       = useState("");
-  const [size,        setSize]        = useState("");
-  const [condition,   setCondition]   = useState("");
-  const [color,       setColor]       = useState("");
-  const [city,        setCity]        = useState("");
+  const [title,        setTitle]        = useState("");
+  const [price,        setPrice]        = useState("");
+  const [negotiable,   setNegotiable]   = useState(false);
+  const [category,     setCategory]     = useState("");
+  const [subcategory,  setSubcategory]  = useState("");
+  const [brand,        setBrand]        = useState("");
+  const [brandQuery,   setBrandQuery]   = useState("");
+  const [comboOpen,    setComboOpen]    = useState(false);
+  const [highlightIdx, setHighlightIdx] = useState(-1);
+  const [size,         setSize]         = useState("");
+  const [condition,    setCondition]    = useState("");
+  const [color,        setColor]        = useState("");
+  const [city,         setCity]         = useState("");
   const [deliveryAvail, setDeliveryAvail] = useState(false);
-  const [description, setDescription] = useState("");
+  const [description,  setDescription]  = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const supabaseRef = useRef(createClient());
+  const supabaseRef  = useRef(createClient());
+  const comboRef     = useRef<HTMLDivElement>(null);
+  const itemRefs     = useRef<(HTMLLIElement | null)[]>([]);
 
-  /** True while at least one image is still streaming to Supabase Storage. */
   const isUploading = entries.some((e) => e.uploading);
 
+  /* ── Combobox: close on outside click ─────────────────────────────────── */
+  useEffect(() => {
+    function onMouseDown(e: MouseEvent) {
+      if (comboRef.current && !comboRef.current.contains(e.target as Node)) {
+        setComboOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, []);
+
+  /* ── Combobox: scroll highlighted item into view ─────────────────────── */
+  useEffect(() => {
+    if (highlightIdx >= 0) {
+      itemRefs.current[highlightIdx]?.scrollIntoView({ block: "nearest" });
+    }
+  }, [highlightIdx]);
+
+  /* ── Image upload ────────────────────────────────────────────────────── */
   async function handleImageChange(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     e.target.value = "";
@@ -102,7 +188,6 @@ export default function SellForm() {
 
     setUploadError(null);
 
-    // Cheap client-side gate so we don't try to push absurd files.
     const oversized = files.find((f) => f.size > MAX_RAW_FILE_BYTES);
     if (oversized) {
       setUploadError(`حجم الصورة كبير جداً (${(oversized.size / 1024 / 1024).toFixed(1)} MB). الحد الأقصى 20 ميغابايت.`);
@@ -116,7 +201,6 @@ export default function SellForm() {
       return;
     }
 
-    // Add placeholders immediately so the user sees thumbnails right away.
     const baseIndex = entries.length;
     const placeholders: ImageEntry[] = files.map((f) => ({
       preview:   URL.createObjectURL(f),
@@ -126,7 +210,6 @@ export default function SellForm() {
     }));
     setEntries((prev) => [...prev, ...placeholders]);
 
-    // Kick off uploads in parallel. iOS streams the bytes; no decode, no canvas — safe.
     await Promise.all(files.map(async (file, i) => {
       const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
       const safeExt = ["jpg", "jpeg", "png", "webp"].includes(ext) ? ext : "jpg";
@@ -145,8 +228,8 @@ export default function SellForm() {
         const slot = baseIndex + i;
         if (!next[slot]) return prev;
         next[slot] = error
-          ? { ...next[slot], uploading: false, error: true,  rawPath: null    }
-          : { ...next[slot], uploading: false, error: false, rawPath          };
+          ? { ...next[slot], uploading: false, error: true,  rawPath: null }
+          : { ...next[slot], uploading: false, error: false, rawPath      };
         return next;
       });
 
@@ -162,56 +245,101 @@ export default function SellForm() {
       const target = prev[index];
       if (!target) return prev;
       URL.revokeObjectURL(target.preview);
-
-      // Fire-and-forget cleanup of the raw temp file. If it fails (e.g. RLS),
-      // the server-side cron sweeper picks it up later.
       if (target.rawPath) {
         supabaseRef.current.storage
           .from("product-images")
           .remove([target.rawPath])
           .catch(() => { /* ignored */ });
       }
-
       return prev.filter((_, i) => i !== index);
     });
   }
 
+  /* ── Category ────────────────────────────────────────────────────────── */
   const isOneSize = category === "حقائب" || category === "إكسسوارات";
-  const sizeType  = category === "أحذية" ? "numbers"
-    : isOneSize ? "one-size"
-    : "letters";
+  const sizeType  = category === "أحذية" ? "numbers" : isOneSize ? "one-size" : "letters";
 
   function handleCategoryChange(newCat: string) {
     setCategory(newCat);
-    setSubcategory(""); // reset whenever main category changes
+    setSubcategory("");
+    setBrand("");
+    setBrandQuery("");
+    setComboOpen(false);
+    setHighlightIdx(-1);
     const autoOneSize = newCat === "حقائب" || newCat === "إكسسوارات";
     setSize(autoOneSize ? "مقاس واحد" : "");
   }
 
+  /* ── Brand combobox ──────────────────────────────────────────────────── */
+  const featuredValues: string[] = category ? (CATEGORY_FEATURED_BRANDS[category] ?? []) : [];
+
+  const filteredDropdownBrands = (() => {
+    const q = brandQuery.trim().toLowerCase();
+    const filtered = q
+      ? SEARCHABLE_BRANDS.filter(
+          (b) => b.label.includes(q) || b.value.toLowerCase().includes(q)
+        )
+      : SEARCHABLE_BRANDS;
+    return [...filtered, OTHER_BRAND];
+  })();
+
+  function handleBrandPillClick(value: string) {
+    setBrand((prev) => (prev === value ? "" : value));
+    setBrandQuery("");
+    setComboOpen(false);
+    setHighlightIdx(-1);
+  }
+
+  function handleBrandQueryChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setBrandQuery(e.target.value);
+    setBrand("");
+    setComboOpen(true);
+    setHighlightIdx(-1);
+  }
+
+  function selectBrandFromCombo(item: { value: string; label: string }) {
+    setBrand(item.value);
+    setBrandQuery(item.label);
+    setComboOpen(false);
+    setHighlightIdx(-1);
+  }
+
+  function handleBrandKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setComboOpen(true);
+      setHighlightIdx((i) => Math.min(i + 1, filteredDropdownBrands.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightIdx((i) => Math.max(i - 1, 0));
+    } else if (e.key === "Enter") {
+      const item = filteredDropdownBrands[highlightIdx];
+      if (item) { e.preventDefault(); selectBrandFromCombo(item); }
+    } else if (e.key === "Escape") {
+      setComboOpen(false);
+    }
+  }
+
+  /* ── Submit ──────────────────────────────────────────────────────────── */
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-
     if (isUploading) {
       setUploadError("يرجى الانتظار حتى انتهاء رفع الصور.");
       return;
     }
-
     const fd = new FormData(e.currentTarget);
-    // Send only the raw storage paths — bytes already live in Supabase.
     entries.forEach((entry) => {
       if (entry.rawPath) fd.append("raw_paths", entry.rawPath);
     });
     startTransition(() => formAction(fd));
   }
 
-
+  /* ── Render ──────────────────────────────────────────────────────────── */
   return (
     <div dir="rtl" className="min-h-screen bg-gray-50 pb-32">
 
-      {/* ── Header ───────────────────────────────────────────────────── */}
       <PageHeader title="بيع منتج جديد" />
 
-      {/* ── Form ─────────────────────────────────────────────────────── */}
       <div className="md:max-w-5xl mx-auto md:mt-8 md:mb-12">
       <form className="px-4 pt-6" onSubmit={handleSubmit}>
       <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start relative">
@@ -220,7 +348,6 @@ export default function SellForm() {
         <div className="md:col-span-5 md:sticky top-28">
           <p className={fieldLabel}>الصور</p>
 
-          {/* No name attr — images are injected manually in handleSubmit */}
           <input
             ref={fileInputRef}
             type="file"
@@ -280,29 +407,23 @@ export default function SellForm() {
                     alt=""
                     className={`w-full h-full object-cover ${entry.uploading ? "opacity-60" : ""}`}
                   />
-
                   {entry.uploading && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/20">
                       <Loader2 className="h-6 w-6 text-white animate-spin" />
                     </div>
                   )}
-
                   {entry.error && !entry.uploading && (
                     <div className="absolute inset-0 flex items-center justify-center bg-red-500/40 text-white text-[11px] font-bold text-center px-2">
                       فشل الرفع
                     </div>
                   )}
-
                   <button
                     type="button"
                     onClick={() => removeImage(i)}
                     className="
-                      absolute top-1 left-1
-                      w-6 h-6 rounded-full
-                      bg-red-500 text-white
-                      flex items-center justify-center
-                      shadow-md hover:bg-red-600
-                      transition-colors
+                      absolute top-1 left-1 w-6 h-6 rounded-full
+                      bg-red-500 text-white flex items-center justify-center
+                      shadow-md hover:bg-red-600 transition-colors
                     "
                   >
                     <X className="w-3.5 h-3.5" />
@@ -316,7 +437,7 @@ export default function SellForm() {
         {/* ── Right column: All form fields ────────────────────────── */}
         <div className="md:col-span-7">
 
-          {/* ── Card 1: Basic Info ─────────────────────────────────── */}
+          {/* ── Card 1: Basic Info ────────────────────────────────── */}
           <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4 mb-6">
             <h3 className="text-sm font-bold text-muted-foreground uppercase tracking-wide pb-1 border-b border-gray-100">
               المعلومات الأساسية
@@ -326,15 +447,10 @@ export default function SellForm() {
             <div>
               <label htmlFor="title" className={fieldLabel}>عنوان الإعلان</label>
               <input
-                id="title"
-                name="title"
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
+                id="title" name="title" type="text"
+                value={title} onChange={(e) => setTitle(e.target.value)}
                 placeholder="مثال: معطف زارا أزرق مقاس M"
-                dir="rtl"
-                required
-                className={input}
+                dir="rtl" required className={input}
               />
             </div>
 
@@ -343,12 +459,9 @@ export default function SellForm() {
               <label htmlFor="category" className={fieldLabel}>الفئة</label>
               <div className="relative">
                 <select
-                  id="category"
-                  name="category"
-                  value={category}
-                  onChange={(e) => handleCategoryChange(e.target.value)}
-                  dir="rtl"
-                  required
+                  id="category" name="category"
+                  value={category} onChange={(e) => handleCategoryChange(e.target.value)}
+                  dir="rtl" required
                   className={`${input} appearance-none cursor-pointer`}
                 >
                   <option value="" disabled>اختر الفئة</option>
@@ -360,15 +473,17 @@ export default function SellForm() {
               </div>
             </div>
 
-            {/* Sub-category pills — shown only when the selected category has sub-categories */}
+            {/* Sub-category pills */}
             {category && SUB_CATEGORIES[category] && (
               <div>
-                <p className={fieldLabel}>الفئة الفرعية <span className="font-normal text-muted-foreground text-xs">(اختياري)</span></p>
+                <p className={fieldLabel}>
+                  الفئة الفرعية{" "}
+                  <span className="font-normal text-muted-foreground text-xs">(اختياري)</span>
+                </p>
                 <div className="flex flex-wrap gap-2">
                   {SUB_CATEGORIES[category].map((sub) => (
                     <button
-                      key={sub}
-                      type="button"
+                      key={sub} type="button"
                       onClick={() => setSubcategory(sub === subcategory ? "" : sub)}
                       className={pill(subcategory === sub)}
                     >
@@ -379,20 +494,103 @@ export default function SellForm() {
               </div>
             )}
 
-            {/* Brand */}
+            {/* ── Brand ─────────────────────────────────────────── */}
             <div>
               <p className={fieldLabel}>الماركة</p>
-              <div className="flex flex-wrap gap-2">
-                {BRANDS.map((b) => (
-                  <button
-                    key={b.value}
-                    type="button"
-                    onClick={() => setBrand(b.value === brand ? "" : b.value)}
-                    className={pill(brand === b.value)}
+
+              {/* Always-visible pills: Custom Made + category featured */}
+              <div className="flex flex-wrap gap-2 mb-4">
+                <button
+                  type="button"
+                  onClick={() => handleBrandPillClick("Custom Made")}
+                  className={pill(brand === "Custom Made")}
+                >
+                  تفصيل
+                </button>
+
+                {featuredValues.map((bv) => {
+                  const item = BRANDS_MAP[bv];
+                  if (!item) return null;
+                  return (
+                    <button
+                      key={bv} type="button"
+                      onClick={() => handleBrandPillClick(bv)}
+                      className={pill(brand === bv)}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+
+                {!category && (
+                  <span className="text-xs text-muted-foreground self-center pr-1">
+                    اختر الفئة لعرض الماركات المقترحة
+                  </span>
+                )}
+              </div>
+
+              {/* Divider */}
+              <div className="flex items-center gap-3 mb-3">
+                <div className="flex-1 border-t border-border" />
+                <span className="text-xs text-muted-foreground shrink-0">أو ابحث عن ماركة أخرى</span>
+                <div className="flex-1 border-t border-border" />
+              </div>
+
+              {/* Combobox */}
+              <div ref={comboRef} className="relative">
+                <div className="
+                  w-full rounded-xl border border-border bg-card px-4 py-3.5
+                  flex items-center gap-2
+                  focus-within:border-primary transition-colors
+                ">
+                  <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <input
+                    type="text"
+                    value={brandQuery}
+                    onChange={handleBrandQueryChange}
+                    onFocus={() => setComboOpen(true)}
+                    onKeyDown={handleBrandKeyDown}
+                    placeholder="مثال: نايك، مايكل كورس، زارا…"
+                    className="flex-1 bg-transparent outline-none text-sm text-foreground placeholder:text-muted-foreground"
+                    dir="rtl"
+                    autoComplete="off"
+                  />
+                  {brandQuery && (
+                    <button
+                      type="button"
+                      onClick={() => { setBrandQuery(""); setBrand(""); setHighlightIdx(-1); }}
+                      className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+
+                {comboOpen && filteredDropdownBrands.length > 0 && (
+                  <ul
+                    role="listbox"
+                    className="absolute top-full right-0 left-0 mt-1 bg-white border border-border rounded-xl shadow-lg max-h-52 overflow-y-auto z-20"
                   >
-                    {b.label}
-                  </button>
-                ))}
+                    {filteredDropdownBrands.map((b, i) => (
+                      <li
+                        key={b.value}
+                        role="option"
+                        aria-selected={brand === b.value}
+                        ref={(el) => { itemRefs.current[i] = el; }}
+                        onMouseDown={(e) => { e.preventDefault(); selectBrandFromCombo(b); }}
+                        onMouseEnter={() => setHighlightIdx(i)}
+                        className={`
+                          px-4 py-2.5 text-sm cursor-pointer select-none
+                          ${brand === b.value ? "text-primary font-semibold" : "text-foreground"}
+                          ${i === highlightIdx ? "bg-primary/10" : "hover:bg-muted"}
+                          ${b.value === "Other" ? "border-t border-border mt-1" : ""}
+                        `}
+                      >
+                        {b.label}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
           </div>
@@ -408,15 +606,13 @@ export default function SellForm() {
               <label htmlFor="color" className={fieldLabel}>اللون</label>
               <div className="relative">
                 <select
-                  id="color"
-                  name="color"
-                  value={color}
-                  onChange={(e) => setColor(e.target.value)}
+                  id="color" name="color"
+                  value={color} onChange={(e) => setColor(e.target.value)}
                   dir="rtl"
                   className={`${input} appearance-none cursor-pointer`}
                 >
                   <option value="">اختر اللون</option>
-                  {COLORS.map((c) => (
+                  {["أسود","أبيض","رمادي","بيج","بني","أزرق","أخضر","أحمر","وردي","برتقالي","أصفر","بنفسجي","ذهبي","فضي","متعدد الألوان"].map((c) => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
@@ -435,24 +631,13 @@ export default function SellForm() {
                 <div className="relative">
                   <select
                     name="size_value"
-                    value={size}
-                    onChange={(e) => setSize(e.target.value)}
-                    dir="rtl"
-                    required
+                    value={size} onChange={(e) => setSize(e.target.value)}
+                    dir="rtl" required
                     className={`${input} appearance-none cursor-pointer`}
                   >
                     <option value="" disabled>اختر المقاس</option>
                     {category === "أحذية" ? (
                       SHOE_SIZES.map((s) => <option key={s} value={s}>{s}</option>)
-                    ) : category === "فساتين" ? (
-                      <>
-                        <optgroup label="حروف">
-                          {LETTER_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
-                        </optgroup>
-                        <optgroup label="أرقام">
-                          {CLOTHING_NUM_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
-                        </optgroup>
-                      </>
                     ) : (
                       <>
                         <optgroup label="حروف">
@@ -475,15 +660,13 @@ export default function SellForm() {
               <div className="grid grid-cols-2 gap-2">
                 {CONDITIONS.map((c) => (
                   <button
-                    key={c}
-                    type="button"
+                    key={c} type="button"
                     onClick={() => setCondition(c === condition ? "" : c)}
                     className={`
                       py-3 px-3 rounded-xl text-xs font-semibold border text-center transition-all
                       ${condition === c
                         ? "bg-primary text-white border-primary"
-                        : "bg-card text-foreground border-border hover:border-primary/50"
-                      }
+                        : "bg-card text-foreground border-border hover:border-primary/50"}
                     `}
                   >
                     {c}
@@ -504,16 +687,9 @@ export default function SellForm() {
               <label htmlFor="price" className={fieldLabel}>السعر</label>
               <div className="relative">
                 <input
-                  id="price"
-                  name="price"
-                  type="number"
-                  inputMode="decimal"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  placeholder="0"
-                  dir="rtl"
-                  required
-                  min="0"
+                  id="price" name="price" type="number" inputMode="decimal"
+                  value={price} onChange={(e) => setPrice(e.target.value)}
+                  placeholder="0" dir="rtl" required min="0"
                   className={`${input} pl-14`}
                 />
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground pointer-events-none select-none">
@@ -526,18 +702,11 @@ export default function SellForm() {
             <label className="flex items-center justify-between px-4 py-3.5 rounded-xl border border-border bg-card cursor-pointer hover:border-primary/50 transition-colors">
               <span className="text-sm font-medium text-foreground">قابل للتفاوض</span>
               <div
-                role="switch"
-                aria-checked={negotiable}
+                role="switch" aria-checked={negotiable}
                 onClick={() => setNegotiable((n) => !n)}
-                className={`relative w-11 h-6 rounded-full transition-colors duration-200 shrink-0 ${
-                  negotiable ? "bg-primary" : "bg-border"
-                }`}
+                className={`relative w-11 h-6 rounded-full transition-colors duration-200 shrink-0 ${negotiable ? "bg-primary" : "bg-border"}`}
               >
-                <span
-                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                    negotiable ? "-translate-x-5" : "translate-x-0.5"
-                  }`}
-                />
+                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${negotiable ? "-translate-x-5" : "translate-x-0.5"}`} />
               </div>
             </label>
 
@@ -546,15 +715,13 @@ export default function SellForm() {
               <label htmlFor="city" className={fieldLabel}>المدينة</label>
               <div className="relative">
                 <select
-                  id="city"
-                  name="city"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
+                  id="city" name="city"
+                  value={city} onChange={(e) => setCity(e.target.value)}
                   dir="rtl"
                   className={`${input} appearance-none cursor-pointer`}
                 >
                   <option value="">اختر المدينة</option>
-                  {CITIES.map((c) => (
+                  {["طرابلس","بنغازي","مصراتة","الزاوية","البيضاء","سبها","الزنتان","زوارة","غريان","ترهونة","الخمس","سرت","درنة","توبرق"].map((c) => (
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
@@ -566,18 +733,11 @@ export default function SellForm() {
             <label className="flex items-center justify-between px-4 py-3.5 rounded-xl border border-border bg-card cursor-pointer hover:border-primary/50 transition-colors">
               <span className="text-sm font-medium text-foreground">مستعد للتوصيل خارج المدينة</span>
               <div
-                role="switch"
-                aria-checked={deliveryAvail}
+                role="switch" aria-checked={deliveryAvail}
                 onClick={() => setDeliveryAvail((d) => !d)}
-                className={`relative w-11 h-6 rounded-full transition-colors duration-200 shrink-0 ${
-                  deliveryAvail ? "bg-primary" : "bg-border"
-                }`}
+                className={`relative w-11 h-6 rounded-full transition-colors duration-200 shrink-0 ${deliveryAvail ? "bg-primary" : "bg-border"}`}
               >
-                <span
-                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                    deliveryAvail ? "-translate-x-5" : "translate-x-0.5"
-                  }`}
-                />
+                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${deliveryAvail ? "-translate-x-5" : "translate-x-0.5"}`} />
               </div>
             </label>
 
@@ -585,14 +745,10 @@ export default function SellForm() {
             <div>
               <label htmlFor="description" className={fieldLabel}>الوصف</label>
               <textarea
-                id="description"
-                name="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                id="description" name="description"
+                value={description} onChange={(e) => setDescription(e.target.value)}
                 placeholder="اكتب تفاصيل المنتج، سبب البيع، أي عيوب إن وجدت…"
-                dir="rtl"
-                rows={4}
-                maxLength={500}
+                dir="rtl" rows={4} maxLength={500}
                 className={`${input} resize-none leading-relaxed`}
               />
               <p className="text-xs text-muted-foreground mt-1.5 text-left">
@@ -601,7 +757,7 @@ export default function SellForm() {
             </div>
           </div>
 
-          {/* ── Hidden inputs for custom-UI state ──────────────────── */}
+          {/* ── Hidden inputs ──────────────────────────────────────── */}
           <input type="hidden" name="brand"              value={brand} />
           <input type="hidden" name="subcategory"        value={subcategory} />
           <input type="hidden" name="size_type"          value={sizeType} />
@@ -610,19 +766,16 @@ export default function SellForm() {
           <input type="hidden" name="is_open_to_offers"  value={String(negotiable)} />
           <input type="hidden" name="delivery_available" value={String(deliveryAvail)} />
 
-          {/* ── Upload error (client-side compression failure) ─────── */}
           {uploadError && (
             <p className="text-sm text-red-500 text-center bg-red-50 border border-red-200 rounded-xl px-4 py-3">
               {uploadError}
             </p>
           )}
 
-          {/* ── Server action error ─────────────────────────────────── */}
           {state?.error && (
             <p className="text-sm text-red-500 text-center">{state.error}</p>
           )}
 
-          {/* ── Submit ─────────────────────────────────────────────── */}
           <button
             type="submit"
             disabled={pending || isUploading}
@@ -634,16 +787,11 @@ export default function SellForm() {
               shadow-[0_4px_24px_rgba(93,42,66,0.40)]
             "
           >
-            {isUploading
-              ? "جاري رفع الصور…"
-              : pending
-              ? "جاري المعالجة والنشر…"
-              : "نشر الإعلان"
-            }
+            {isUploading ? "جاري رفع الصور…" : pending ? "جاري المعالجة والنشر…" : "نشر الإعلان"}
           </button>
 
-        </div>{/* end right column */}
-      </div>{/* end grid */}
+        </div>
+      </div>
       </form>
       </div>
     </div>

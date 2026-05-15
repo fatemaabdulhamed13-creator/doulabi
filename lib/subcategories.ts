@@ -13,6 +13,7 @@
 export const SUB_CATEGORIES: Record<string, string[]> = {
   فساتين: [
     "سهرة / زفاف",
+    "فيلو",
     "حفلات بسيطة",
     "كاجوال",
     "بدلات رسمية",
