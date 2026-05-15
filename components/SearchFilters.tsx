@@ -261,6 +261,13 @@ export default function SearchFilters() {
         <span className="text-sm text-foreground">توصيل خارج المدينة</span>
       </label>
 
+      <button
+        type="submit"
+        className="w-full py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:brightness-110 transition-all"
+      >
+        بحث
+      </button>
+
       {hasFilters && (
         <button
           type="button"
