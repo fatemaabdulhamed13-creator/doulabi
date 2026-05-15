@@ -5,6 +5,7 @@ import { Camera, ChevronDown, Loader2, Search, ShieldAlert, X } from "lucide-rea
 import { createListingAction } from "@/app/actions/product";
 import PageHeader from "@/components/PageHeader";
 import { SUB_CATEGORIES } from "@/lib/subcategories";
+import { BRANDS, SEARCHABLE_BRANDS as _SEARCHABLE_BRANDS } from "@/lib/brands";
 import { createClient } from "@/lib/supabase/client";
 
 const MAX_RAW_FILE_BYTES = 20 * 1024 * 1024;
@@ -29,73 +30,6 @@ const LETTER_SIZES = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "XXXL"];
 const CLOTHING_NUM_SIZES = Array.from({ length: 12 }, (_, i) => String(34 + i * 2));
 const SHOE_SIZES = Array.from({ length: 10 }, (_, i) => String(36 + i));
 
-const BRANDS = [
-  { value: "Adidas",          label: "أديداس"           },
-  { value: "Aldo",            label: "ألدو"              },
-  { value: "Armani",          label: "أرماني"            },
-  { value: "ASOS",            label: "ASOS"              },
-  { value: "Badgley Mischka", label: "بادجلي ميشكا"     },
-  { value: "Balenciaga",      label: "بالنسياغا"        },
-  { value: "Bershka",         label: "بيرشكا"           },
-  { value: "Burberry",        label: "بربري"            },
-  { value: "Calvin Klein",    label: "كالفن كلاين"     },
-  { value: "Carter's",        label: "كارتر"            },
-  { value: "Chanel",          label: "شانيل"            },
-  { value: "Champion",        label: "تشامبيون"         },
-  { value: "Coast",           label: "كوست"             },
-  { value: "Coach",           label: "كوتش"             },
-  { value: "Defacto",         label: "ديفاكتو"          },
-  { value: "Dior",            label: "ديور"             },
-  { value: "DKNY",            label: "DKNY"             },
-  { value: "Dune",            label: "ديون"             },
-  { value: "Fendi",           label: "فندي"             },
-  { value: "Fossil",          label: "فوسيل"            },
-  { value: "Gap",             label: "GAP"              },
-  { value: "Gizia",           label: "جيزيا"            },
-  { value: "Gucci",           label: "غوتشي"            },
-  { value: "Guess",           label: "غيس"              },
-  { value: "H&M",             label: "H&M"              },
-  { value: "Karen Millen",    label: "كارن ميلن"       },
-  { value: "Kate Spade",      label: "كيت سبيد"        },
-  { value: "Lacoste",         label: "لاكوست"           },
-  { value: "LC Waikiki",      label: "LC Waikiki"       },
-  { value: "Levi's",          label: "ليفايز"           },
-  { value: "Louis Vuitton",   label: "لويس فيتون"      },
-  { value: "Mango",           label: "مانجو"            },
-  { value: "Marks & Spencer", label: "ماركس أند سبنسر" },
-  { value: "Massimo Dutti",   label: "ماسيمو دوتي"     },
-  { value: "Michael Kors",    label: "مايكل كورس"      },
-  { value: "Monsoon",         label: "مونسون"           },
-  { value: "Mothercare",      label: "مازر كير"         },
-  { value: "New Balance",     label: "نيو بالانس"       },
-  { value: "Next",            label: "نكست"             },
-  { value: "Nike",            label: "نايك"             },
-  { value: "Nine West",       label: "ناين ويست"       },
-  { value: "Pandora",         label: "باندورا"          },
-  { value: "Polo",            label: "بولو"             },
-  { value: "Prada",           label: "برادا"            },
-  { value: "Pull & Bear",     label: "بول أند بير"     },
-  { value: "Puma",            label: "بوما"             },
-  { value: "Rado",            label: "رادو"             },
-  { value: "Ralph Lauren",    label: "رالف لورن"        },
-  { value: "Reebok",          label: "ريبوك"            },
-  { value: "River Island",    label: "ريفر أيلاند"     },
-  { value: "Sherri Hill",     label: "شيري هيل"         },
-  { value: "Steve Madden",    label: "ستيف مادن"        },
-  { value: "Stradivarius",    label: "ستراديفاريوس"    },
-  { value: "Swarovski",       label: "سواروفسكي"       },
-  { value: "Ted Baker",        label: "تيد بيكر"         },
-  { value: "Tommy Hilfiger",  label: "تومي هيلفيغر"   },
-  { value: "Tory Burch",      label: "توري بيرش"       },
-  { value: "Under Armour",    label: "أندر آرمور"      },
-  { value: "Valentino",       label: "فالنتينو"         },
-  { value: "Versace",         label: "فيرساتشي"         },
-  { value: "Zara",            label: "زارا"             },
-  // Pinned — Custom Made is always a pill; Other is pinned to combobox bottom
-  { value: "Custom Made",     label: "تفصيل"            },
-  { value: "Other",           label: "أخرى"             },
-];
-
 const CATEGORY_FEATURED_BRANDS: Record<string, string[]> = {
   "فساتين":         ["Zara", "Sherri Hill", "Gizia", "Monsoon", "Mango", "H&M"],
   "أحذية":          ["Dune", "Steve Madden", "Zara", "Aldo", "Nine West", "Michael Kors"],
@@ -110,11 +44,7 @@ const CATEGORY_FEATURED_BRANDS: Record<string, string[]> = {
 
 const BRANDS_MAP = Object.fromEntries(BRANDS.map((b) => [b.value, b]));
 const OTHER_BRAND = BRANDS_MAP["Other"];
-
-// Full alphabetical list for the combobox — Custom Made and Other are excluded (handled separately)
-const SEARCHABLE_BRANDS = BRANDS
-  .filter((b) => b.value !== "Custom Made" && b.value !== "Other")
-  .sort((a, b) => a.label.localeCompare(b.label, "ar"));
+const SEARCHABLE_BRANDS = _SEARCHABLE_BRANDS;
 
 /* ── Shared styles ───────────────────────────────────────────────────────── */
 

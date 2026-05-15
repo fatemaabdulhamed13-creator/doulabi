@@ -1,23 +1,15 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { useRef, useState } from "react";
+import { ChevronDown, X } from "lucide-react";
+import { BRAND_LABEL, SEARCHABLE_BRANDS } from "@/lib/brands";
 
 const CATEGORIES = [
   "فساتين", "أحذية", "حقائب", "إكسسوارات",
   "ملابس رجالية", "ملابس أطفال", "ملابس رياضية", "أخرى",
 ];
 
-const BRANDS = [
-  { value: "Zara",         label: "زارا"       },
-  { value: "Monsoon",      label: "مونسون"     },
-  { value: "Dune",         label: "ديون"       },
-  { value: "Sherri Hill",  label: "شيري هيل"   },
-  { value: "Michael Kors", label: "مايكل كورس" },
-  { value: "Gizia",        label: "جيزيا"      },
-  { value: "Other",        label: "أخرى"       },
-];
 
 const LETTER_SIZES       = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "XXXL"];
 const CLOTHING_NUM_SIZES = Array.from({ length: 12 },  (_, i) => String(34 + i * 2));
@@ -54,7 +46,10 @@ export default function SearchFilters() {
   const [maxPrice, setMaxPrice] = useState(sp.get("maxPrice") ?? "");
   const [color,    setColor]    = useState(sp.get("color")    ?? "");
   const [city,     setCity]     = useState(sp.get("city")     ?? "");
-  const [brand,    setBrand]    = useState(sp.get("brand")    ?? "");
+  const [brand,          setBrand]          = useState(sp.get("brand") ?? "");
+  const [brandQuery,     setBrandQuery]     = useState(sp.get("brand") ? (BRAND_LABEL[sp.get("brand")!] ?? sp.get("brand")!) : "");
+  const [brandComboOpen, setBrandComboOpen] = useState(false);
+  const brandRef = useRef<HTMLDivElement>(null);
   const [delivery, setDelivery] = useState(sp.get("delivery") === "true");
 
   const isOneSize = category === "حقائب" || category === "إكسسوارات";
@@ -84,7 +79,7 @@ export default function SearchFilters() {
 
   function reset() {
     setQ(""); setCategory(""); setSize(""); setMinPrice(""); setMaxPrice("");
-    setColor(""); setCity(""); setBrand(""); setDelivery(false);
+    setColor(""); setCity(""); setBrand(""); setBrandQuery(""); setDelivery(false);
     router.push("/search");
   }
 
@@ -128,15 +123,63 @@ export default function SearchFilters() {
         </div>
       </div>
 
-      {/* Brand */}
-      <div>
+      {/* Brand combobox */}
+      <div ref={brandRef}>
         <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">الماركة</label>
         <div className="relative">
-          <select value={brand} onChange={(e) => setBrand(e.target.value)} dir="rtl" className={sel}>
-            <option value="">الكل</option>
-            {BRANDS.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
-          </select>
-          <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            type="text"
+            dir="rtl"
+            value={brandQuery}
+            placeholder="ابحث عن ماركة..."
+            className="w-full rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors pr-8"
+            onFocus={() => setBrandComboOpen(true)}
+            onChange={(e) => {
+              setBrandQuery(e.target.value);
+              setBrand("");
+              setBrandComboOpen(true);
+            }}
+          />
+          {brand ? (
+            <button
+              type="button"
+              onClick={() => { setBrand(""); setBrandQuery(""); }}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          ) : (
+            <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          )}
+
+          {brandComboOpen && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setBrandComboOpen(false)} />
+              <ul className="absolute z-20 mt-1 w-full max-h-52 overflow-y-auto rounded-xl border border-border bg-card shadow-lg text-sm">
+                {(brandQuery
+                  ? SEARCHABLE_BRANDS.filter((b) =>
+                      b.label.includes(brandQuery) ||
+                      b.value.toLowerCase().includes(brandQuery.toLowerCase())
+                    )
+                  : SEARCHABLE_BRANDS
+                ).map((b) => (
+                  <li
+                    key={b.value}
+                    dir="rtl"
+                    className={`px-4 py-2.5 cursor-pointer hover:bg-muted transition-colors ${brand === b.value ? "text-primary font-semibold" : "text-foreground"}`}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      setBrand(b.value);
+                      setBrandQuery(b.label);
+                      setBrandComboOpen(false);
+                    }}
+                  >
+                    {b.label}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </div>
       </div>
 

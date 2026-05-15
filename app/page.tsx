@@ -3,6 +3,7 @@ import Image from "next/image";
 import { ShoppingBag, Search } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import FavoriteButton from "@/components/FavoriteButton";
+import { BRAND_LABEL } from "@/lib/brands";
 
 /* ── Static data ─────────────────────────────────────────────────────────── */
 
@@ -24,16 +25,6 @@ const BRANDS = [
   { name: "جيزيا",      logo: "/brands/gizia.png",       href: "/search?brand=gizia"       },
 ];
 
-/** Maps the English brand value stored in the DB → Arabic display name */
-const BRAND_AR: Record<string, string> = {
-  Zara:          "زارا",
-  Monsoon:       "مونسون",
-  Dune:          "ديون",
-  "Sherri Hill": "شيري هيل",
-  "Michael Kors": "مايكل كورس",
-  Gizia:         "جيزيا",
-  Other:         "أخرى",
-};
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
@@ -273,7 +264,7 @@ export default async function Home() {
 
                     <Link href={`/product/${p.id}`} className="flex flex-col">
                       <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-0.5">
-                        {BRAND_AR[p.brand] ?? p.brand}
+                        {BRAND_LABEL[p.brand] ?? p.brand}
                       </p>
                       <p className="text-sm font-medium text-foreground line-clamp-1 mb-2">
                         {p.title}
