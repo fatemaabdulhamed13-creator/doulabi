@@ -18,7 +18,18 @@ type FavoriteRow = {
   } | null;
 };
 
-export default async function FavoritesPage() {
+const PAGE_SIZE = 12;
+
+export default async function FavoritesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const { page: pageParam } = await searchParams;
+  const page  = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
+  const start = (page - 1) * PAGE_SIZE;
+  const end   = page * PAGE_SIZE - 1;
+
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -29,9 +40,12 @@ export default async function FavoritesPage() {
     .select("product_id, products ( id, title, price, brand, size_value, image_urls )")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false })
+    .range(start, end)
     .returns<FavoriteRow[]>();
 
   const favorites = (data ?? []).filter((f) => f.products !== null);
+  const hasPrev   = page > 1;
+  const hasNext   = favorites.length === PAGE_SIZE;
 
   return (
     <div dir="rtl" className="min-h-screen bg-background pb-32">
@@ -114,6 +128,39 @@ export default async function FavoritesPage() {
             >
               تصفح المنتجات
             </Link>
+          </div>
+        )}
+
+        {/* ── Pagination controls ──────────────────────────────────── */}
+        {(hasPrev || hasNext) && (
+          <div className="flex items-center justify-center gap-4 mt-8">
+            {hasPrev ? (
+              <Link
+                href={`/favorites?page=${page - 1}`}
+                className="px-5 py-2 rounded-full border border-border bg-muted text-sm font-semibold text-foreground hover:bg-primary hover:text-white hover:border-primary transition-all"
+              >
+                ← السابق
+              </Link>
+            ) : (
+              <span className="px-5 py-2 rounded-full border border-border bg-muted text-sm font-semibold text-muted-foreground/40 cursor-not-allowed">
+                ← السابق
+              </span>
+            )}
+
+            <span className="text-sm text-muted-foreground font-medium">صفحة {page}</span>
+
+            {hasNext ? (
+              <Link
+                href={`/favorites?page=${page + 1}`}
+                className="px-5 py-2 rounded-full border border-border bg-muted text-sm font-semibold text-foreground hover:bg-primary hover:text-white hover:border-primary transition-all"
+              >
+                التالي →
+              </Link>
+            ) : (
+              <span className="px-5 py-2 rounded-full border border-border bg-muted text-sm font-semibold text-muted-foreground/40 cursor-not-allowed">
+                التالي →
+              </span>
+            )}
           </div>
         )}
       </main>

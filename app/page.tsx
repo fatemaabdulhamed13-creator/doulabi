@@ -25,6 +25,9 @@ const BRANDS = [
   { name: "جيزيا",      logo: "/brands/gizia.png",       href: "/search?brand=gizia"       },
 ];
 
+/* ── Pagination config ───────────────────────────────────────────────────── */
+
+const PAGE_SIZE = 12; // ← adjust this to control cards per page
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
@@ -54,14 +57,25 @@ function SectionHeading({
 
 /* ── Page ────────────────────────────────────────────────────────────────── */
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const { page: pageParam } = await searchParams;
+  const page = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
+
+  const start = (page - 1) * PAGE_SIZE;
+  const end   = page * PAGE_SIZE - 1;
+
   const supabase = await createClient();
 
   const { data } = await supabase
     .from("products")
     .select("id, title, price, brand, size_value, image_urls")
     .eq("status", "approved")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .range(start, end);
 
   const products = data ?? [];
 
@@ -74,6 +88,9 @@ export default async function Home() {
       .eq("user_id", user.id);
     favIds = new Set((favs ?? []).map((f) => f.product_id as string));
   }
+
+  const hasPrev = page > 1;
+  const hasNext = products.length === PAGE_SIZE; // if we got a full page, there's likely a next one
 
   return (
     <div dir="rtl" className="flex flex-col min-h-screen bg-background">
@@ -222,68 +239,103 @@ export default async function Home() {
               </div>
             </div>
           ) : (
-            <div className="
-              flex gap-3 md:gap-4
-              overflow-x-auto scrollbar-hide
-              snap-x snap-mandatory
-              px-4 md:px-8 lg:px-16
-              pb-2
-            ">
-              {products.map((p) => {
-                const img = p.image_urls?.[0] ?? null;
-                return (
-                  <div
-                    key={p.id}
-                    className="snap-start shrink-0 w-[148px] md:w-[188px] group flex flex-col"
-                  >
-                    {/* Product image */}
-                    <div className="relative aspect-[3/4] rounded-2xl overflow-hidden mb-3 bg-muted">
-                      <Link href={`/product/${p.id}`} className="block w-full h-full">
-                        {img ? (
-                          <Image
-                            src={img}
-                            alt={`${p.brand} — ${p.title}`}
-                            fill
-                            unoptimized
-                            sizes="188px"
-                            className="object-cover group-hover:scale-105 transition-transform duration-300"
+            <>
+              <div className="
+                flex gap-3 md:gap-4
+                overflow-x-auto scrollbar-hide
+                snap-x snap-mandatory
+                px-4 md:px-8 lg:px-16
+                pb-2
+              ">
+                {products.map((p) => {
+                  const img = p.image_urls?.[0] ?? null;
+                  return (
+                    <div
+                      key={p.id}
+                      className="snap-start shrink-0 w-[148px] md:w-[188px] group flex flex-col"
+                    >
+                      {/* Product image */}
+                      <div className="relative aspect-[3/4] rounded-2xl overflow-hidden mb-3 bg-muted">
+                        <Link href={`/product/${p.id}`} className="block w-full h-full">
+                          {img ? (
+                            <Image
+                              src={img}
+                              alt={`${p.brand} — ${p.title}`}
+                              fill
+                              unoptimized
+                              sizes="188px"
+                              className="object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <ShoppingBag className="h-8 w-8 text-muted-foreground/30" />
+                            </div>
+                          )}
+                        </Link>
+                        <div className="absolute top-2 left-2">
+                          <FavoriteButton
+                            productId={p.id}
+                            initialIsFavorited={favIds.has(p.id)}
                           />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <ShoppingBag className="h-8 w-8 text-muted-foreground/30" />
-                          </div>
-                        )}
+                        </div>
+                      </div>
+
+                      <Link href={`/product/${p.id}`} className="flex flex-col">
+                        <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-0.5">
+                          {BRAND_LABEL[p.brand] ?? p.brand}
+                        </p>
+                        <p className="text-sm font-medium text-foreground line-clamp-1 mb-2">
+                          {p.title}
+                        </p>
+
+                        <div className="flex items-center justify-between mt-auto">
+                          <span className="text-sm font-bold text-foreground">
+                            {p.price}{" "}
+                            <span className="text-xs font-normal text-muted-foreground">د.ل</span>
+                          </span>
+                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full border border-border bg-muted text-muted-foreground">
+                            {p.size_value}
+                          </span>
+                        </div>
                       </Link>
-                      <div className="absolute top-2 left-2">
-                        <FavoriteButton
-                          productId={p.id}
-                          initialIsFavorited={favIds.has(p.id)}
-                        />
-                      </div>
                     </div>
+                  );
+                })}
+              </div>
 
-                    <Link href={`/product/${p.id}`} className="flex flex-col">
-                      <p className="text-[10px] font-bold text-primary uppercase tracking-widest mb-0.5">
-                        {BRAND_LABEL[p.brand] ?? p.brand}
-                      </p>
-                      <p className="text-sm font-medium text-foreground line-clamp-1 mb-2">
-                        {p.title}
-                      </p>
+              {/* ── Pagination controls ──────────────────────────────── */}
+              <div className="flex items-center justify-center gap-4 mt-6 px-4">
+                {hasPrev ? (
+                  <Link
+                    href={`/?page=${page - 1}`}
+                    className="px-5 py-2 rounded-full border border-border bg-muted text-sm font-semibold text-foreground hover:bg-primary hover:text-white hover:border-primary transition-all"
+                  >
+                    ← السابق
+                  </Link>
+                ) : (
+                  <span className="px-5 py-2 rounded-full border border-border bg-muted text-sm font-semibold text-muted-foreground/40 cursor-not-allowed">
+                    ← السابق
+                  </span>
+                )}
 
-                      <div className="flex items-center justify-between mt-auto">
-                        <span className="text-sm font-bold text-foreground">
-                          {p.price}{" "}
-                          <span className="text-xs font-normal text-muted-foreground">د.ل</span>
-                        </span>
-                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full border border-border bg-muted text-muted-foreground">
-                          {p.size_value}
-                        </span>
-                      </div>
-                    </Link>
-                  </div>
-                );
-              })}
-            </div>
+                <span className="text-sm text-muted-foreground font-medium">
+                  صفحة {page}
+                </span>
+
+                {hasNext ? (
+                  <Link
+                    href={`/?page=${page + 1}`}
+                    className="px-5 py-2 rounded-full border border-border bg-muted text-sm font-semibold text-foreground hover:bg-primary hover:text-white hover:border-primary transition-all"
+                  >
+                    التالي →
+                  </Link>
+                ) : (
+                  <span className="px-5 py-2 rounded-full border border-border bg-muted text-sm font-semibold text-muted-foreground/40 cursor-not-allowed">
+                    التالي →
+                  </span>
+                )}
+              </div>
+            </>
           )}
         </section>
 

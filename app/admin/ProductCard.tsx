@@ -7,6 +7,7 @@ import {
   approveProductWithImagesAction,
   rejectProductAction,
 } from '@/app/actions/product'
+import { BRANDS } from '@/lib/brands'
 
 export type PendingProduct = {
   id:               string
@@ -26,8 +27,24 @@ export type PendingProduct = {
   } | null
 }
 
+/* ── Canonical category list (mirrors SellForm) ─────────────────────────── */
+const CATEGORIES = [
+  'فساتين', 'أحذية', 'حقائب', 'إكسسوارات',
+  'ملابس رجالية', 'ملابس أطفال', 'ملابس رياضية', 'ملابس تقليدية', 'أخرى',
+]
+
+/* ── Shared select style ────────────────────────────────────────────────── */
+const SELECT_CLS = `
+  w-full rounded-lg border border-border bg-background
+  px-2.5 py-1.5 text-sm text-foreground
+  focus:outline-none focus:ring-2 focus:ring-primary/40
+  disabled:opacity-50 cursor-pointer
+`.trim()
+
 export function ProductCard({ product }: { product: PendingProduct }) {
-  const [images, setImages] = useState(product.image_urls)
+  const [images,   setImages]   = useState(product.image_urls)
+  const [category, setCategory] = useState(product.category)
+  const [brand,    setBrand]    = useState(product.brand)
   const [isPending, startTransition] = useTransition()
 
   function moveImage(idx: number, delta: -1 | 1) {
@@ -38,7 +55,9 @@ export function ProductCard({ product }: { product: PendingProduct }) {
   }
 
   function handleApprove() {
-    startTransition(() => approveProductWithImagesAction(product.id, images))
+    startTransition(() =>
+      approveProductWithImagesAction(product.id, images, category, brand)
+    )
   }
 
   function handleReject() {
@@ -127,11 +146,48 @@ export function ProductCard({ product }: { product: PendingProduct }) {
             </span>
           </div>
 
-          {/* Meta pills */}
+          {/* ── Inline-editable Category & Brand ──────────────────────── */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                الفئة
+              </label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                disabled={isPending}
+                className={SELECT_CLS}
+              >
+                {CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                البراند
+              </label>
+              <select
+                value={brand}
+                onChange={(e) => setBrand(e.target.value)}
+                disabled={isPending}
+                className={SELECT_CLS}
+              >
+                {/* Keep the submitted value as an option even if it's not in BRANDS */}
+                {!BRANDS.some((b) => b.value === brand) && (
+                  <option value={brand}>{brand}</option>
+                )}
+                {BRANDS.map((b) => (
+                  <option key={b.value} value={b.value}>{b.label} — {b.value}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Remaining meta pills (size, condition) */}
           <div className="flex flex-wrap gap-1.5">
             {[
-              product.category,
-              product.brand,
               `${product.size_value} (${product.size_type === 'letters' ? 'حروف' : 'أرقام'})`,
               product.condition,
             ].map((tag) => (
@@ -142,6 +198,12 @@ export function ProductCard({ product }: { product: PendingProduct }) {
                 {tag}
               </span>
             ))}
+            {/* Dim indicator when admin has changed category or brand */}
+            {(category !== product.category || brand !== product.brand) && (
+              <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold">
+                ✎ تم التعديل
+              </span>
+            )}
           </div>
 
           {/* Description */}

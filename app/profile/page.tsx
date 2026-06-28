@@ -40,7 +40,17 @@ const SETTINGS_LINKS: SettingsLink[] = [
 
 /* ── Page ────────────────────────────────────────────────────────────────── */
 
-export default async function ProfilePage() {
+const PAGE_SIZE = 12;
+
+export default async function ProfilePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const { page: pageParam } = await searchParams;
+  const page  = Math.max(1, parseInt(pageParam ?? "1", 10) || 1);
+  const start = (page - 1) * PAGE_SIZE;
+  const end   = page * PAGE_SIZE - 1;
   const supabase = await createClient();
 
   const { data: { user } } = await supabase.auth.getUser();
@@ -54,15 +64,28 @@ export default async function ProfilePage() {
 
   if (!profile) redirect("/login");
 
+  /* ── Counts for stats row (always total, not paged) ─────────────────── */
+  const { data: allProductsData } = await supabase
+    .from("products")
+    .select("id, is_sold")
+    .eq("seller_id", user.id)
+    .returns<{ id: string; is_sold: boolean }[]>();
+
+  const allProducts = allProductsData ?? [];
+  const totalSold   = allProducts.filter((p) => p.is_sold).length;
+
+  /* ── Paged query for the grid ────────────────────────────────────────── */
   const { data: productsData } = await supabase
     .from("products")
     .select("id, title, price, brand, image_urls, status, is_sold")
     .eq("seller_id", user.id)
     .order("created_at", { ascending: false })
+    .range(start, end)
     .returns<Product[]>();
 
-  const products     = productsData ?? [];
-  const totalSold    = products.filter((p) => p.is_sold).length;
+  const products = productsData ?? [];
+  const hasPrev  = page > 1;
+  const hasNext  = products.length === PAGE_SIZE;
 
   const initial  = profile.full_name.charAt(0);
   const joinYear = new Date(profile.created_at).getFullYear();
@@ -112,7 +135,7 @@ export default async function ProfilePage() {
         <div className="md:max-w-4xl mx-auto px-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-card rounded-2xl border border-border p-5 text-center">
-              <p className="text-3xl font-black text-primary mb-1">{products.length}</p>
+              <p className="text-3xl font-black text-primary mb-1">{allProducts.length}</p>
               <p className="text-xs font-semibold text-muted-foreground">معروضاتي</p>
             </div>
             <div className="bg-card rounded-2xl border border-border p-5 text-center">
@@ -238,6 +261,39 @@ export default async function ProfilePage() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* ── Pagination controls ──────────────────────────────────── */}
+        {(hasPrev || hasNext) && (
+          <div className="flex items-center justify-center gap-4 mt-8">
+            {hasPrev ? (
+              <Link
+                href={`/profile?page=${page - 1}`}
+                className="px-5 py-2 rounded-full border border-border bg-muted text-sm font-semibold text-foreground hover:bg-primary hover:text-white hover:border-primary transition-all"
+              >
+                ← السابق
+              </Link>
+            ) : (
+              <span className="px-5 py-2 rounded-full border border-border bg-muted text-sm font-semibold text-muted-foreground/40 cursor-not-allowed">
+                ← السابق
+              </span>
+            )}
+
+            <span className="text-sm text-muted-foreground font-medium">صفحة {page}</span>
+
+            {hasNext ? (
+              <Link
+                href={`/profile?page=${page + 1}`}
+                className="px-5 py-2 rounded-full border border-border bg-muted text-sm font-semibold text-foreground hover:bg-primary hover:text-white hover:border-primary transition-all"
+              >
+                التالي →
+              </Link>
+            ) : (
+              <span className="px-5 py-2 rounded-full border border-border bg-muted text-sm font-semibold text-muted-foreground/40 cursor-not-allowed">
+                التالي →
+              </span>
+            )}
           </div>
         )}
       </section>

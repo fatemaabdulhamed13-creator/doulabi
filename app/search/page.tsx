@@ -9,6 +9,8 @@ import PageHeader from "@/components/PageHeader";
 import { SUB_CATEGORIES } from "@/lib/subcategories";
 import { BRAND_LABEL } from "@/lib/brands";
 
+const PAGE_SIZE = 12;
+
 type Props = {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
@@ -34,7 +36,29 @@ export default async function SearchPage({ searchParams }: Props) {
   const maxPrice    = typeof sp.maxPrice    === "string" ? Number(sp.maxPrice)  : undefined;
   const color       = typeof sp.color       === "string" ? sp.color       : undefined;
   const city        = typeof sp.city        === "string" ? sp.city        : undefined;
+  const brand       = typeof sp.brand       === "string" ? sp.brand       : undefined;
   const delivery    = sp.delivery === "true";
+  const page        = Math.max(1, parseInt(typeof sp.page === "string" ? sp.page : "1", 10) || 1);
+
+  const start = (page - 1) * PAGE_SIZE;
+  const end   = page * PAGE_SIZE - 1;
+
+  /* Build a helper that clones all current params and overrides only `page` */
+  const pageHref = (p: number) => {
+    const params = new URLSearchParams();
+    if (q)           params.set("q",           q);
+    if (category)    params.set("category",    category);
+    if (subcategory) params.set("subcategory", subcategory);
+    if (size)        params.set("size",        size);
+    if (minPrice)    params.set("minPrice",    String(minPrice));
+    if (maxPrice)    params.set("maxPrice",    String(maxPrice));
+    if (color)       params.set("color",       color);
+    if (city)        params.set("city",        city);
+    if (brand)       params.set("brand",       brand);
+    if (delivery)    params.set("delivery",    "true");
+    params.set("page", String(p));
+    return `/search?${params.toString()}`;
+  };
 
   const supabase = await createClient();
 
@@ -52,14 +76,18 @@ export default async function SearchPage({ searchParams }: Props) {
   if (maxPrice)    query = query.lte("price",              maxPrice);
   if (color)       query = query.eq("color",               color);
   if (city)        query = query.eq("city",                city);
+  if (brand)       query = query.eq("brand",               brand);
   if (delivery)    query = query.eq("delivery_available",  true);
 
   const { data } = await query
     .order("created_at", { ascending: false })
+    .range(start, end)
     .returns<Product[]>();
 
   const products    = data ?? [];
-  const isFiltered  = !!(q || category || size || minPrice || maxPrice || color || city || delivery);
+  const isFiltered  = !!(q || category || size || minPrice || maxPrice || color || city || brand || delivery);
+  const hasPrev     = page > 1;
+  const hasNext     = products.length === PAGE_SIZE;
   const heading     = category ?? "تصفح الكل";
 
   return (
@@ -158,7 +186,7 @@ export default async function SearchPage({ searchParams }: Props) {
           {/* Result count */}
           <p className="text-xs text-muted-foreground mb-5">
             <span className="font-bold text-foreground">{products.length}</span>
-            {" "}منتج
+            {" "}منتج — صفحة {page}
             {q           && <span className="text-foreground font-medium"> لـ &quot;{q}&quot;</span>}
             {subcategory && <span className="text-foreground font-medium"> في {subcategory}</span>}
             {category && !subcategory && <span className="text-foreground font-medium"> في {category}</span>}
@@ -231,6 +259,39 @@ export default async function SearchPage({ searchParams }: Props) {
                   </Link>
                 );
               })}
+            </div>
+          )}
+
+          {/* ── Pagination controls ──────────────────────────────── */}
+          {(hasPrev || hasNext) && (
+            <div className="flex items-center justify-center gap-4 mt-8">
+              {hasPrev ? (
+                <Link
+                  href={pageHref(page - 1)}
+                  className="px-5 py-2 rounded-full border border-border bg-muted text-sm font-semibold text-foreground hover:bg-primary hover:text-white hover:border-primary transition-all"
+                >
+                  ← السابق
+                </Link>
+              ) : (
+                <span className="px-5 py-2 rounded-full border border-border bg-muted text-sm font-semibold text-muted-foreground/40 cursor-not-allowed">
+                  ← السابق
+                </span>
+              )}
+
+              <span className="text-sm text-muted-foreground font-medium">صفحة {page}</span>
+
+              {hasNext ? (
+                <Link
+                  href={pageHref(page + 1)}
+                  className="px-5 py-2 rounded-full border border-border bg-muted text-sm font-semibold text-foreground hover:bg-primary hover:text-white hover:border-primary transition-all"
+                >
+                  التالي →
+                </Link>
+              ) : (
+                <span className="px-5 py-2 rounded-full border border-border bg-muted text-sm font-semibold text-muted-foreground/40 cursor-not-allowed">
+                  التالي →
+                </span>
+              )}
             </div>
           )}
         </main>

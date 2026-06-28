@@ -251,12 +251,17 @@ export async function approveProductAction(productId: string, _?: FormData) {
   revalidatePath('/')
 }
 
-export async function approveProductWithImagesAction(productId: string, imageUrls: string[]) {
+export async function approveProductWithImagesAction(
+  productId: string,
+  imageUrls: string[],
+  category: string,
+  brand: string,
+) {
   const supabase = await requireAdmin()
 
   const { error } = await supabase
     .from('products')
-    .update({ status: 'approved', image_urls: imageUrls })
+    .update({ status: 'approved', image_urls: imageUrls, category, brand })
     .eq('id', productId)
 
   if (error) throw new Error(error.message)
