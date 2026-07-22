@@ -27,6 +27,11 @@ const nextConfig: NextConfig = {
         hostname: "*.supabase.co",
         pathname: "/storage/v1/object/public/**",
       },
+      {
+        // Cloudflare R2 default public bucket URL (pub-xxxx.r2.dev)
+        protocol: "https",
+        hostname: "*.r2.dev",
+      },
     ],
   },
 };

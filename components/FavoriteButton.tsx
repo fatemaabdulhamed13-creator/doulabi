@@ -3,15 +3,21 @@
 import { useOptimistic, useTransition } from "react";
 import { Heart } from "lucide-react";
 import { toggleFavoriteAction } from "@/app/actions/favorite";
+import { useFavorites } from "@/components/FavoritesProvider";
 
 type Props = {
-  productId:          string;
-  initialIsFavorited: boolean;
+  productId: string;
+  /** Still accepted so existing call-sites don't break, but ignored in favour
+   *  of the client-side FavoritesProvider context. */
+  initialIsFavorited?: boolean;
 };
 
-export default function FavoriteButton({ productId, initialIsFavorited }: Props) {
+export default function FavoriteButton({ productId }: Props) {
+  const { favIds } = useFavorites();
+  const serverValue = favIds.has(productId);
+
   const [isFav, setOptimisticFav] = useOptimistic(
-    initialIsFavorited,
+    serverValue,
     (_: boolean, next: boolean) => next
   );
   const [, startTransition] = useTransition();

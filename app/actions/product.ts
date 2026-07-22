@@ -3,8 +3,10 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import sharp from 'sharp'
+import { GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { r2, R2_BUCKET, r2PublicUrl } from '@/lib/r2'
 import {
   publishListingSchema,
   draftListingSchema,
@@ -12,10 +14,7 @@ import {
 
 export type ListingState = { error: string } | null
 
-/** Bucket where temp raw uploads and final processed images both live. */
-const STORAGE_BUCKET = 'product-images'
-
-/** Path prefix the client uses for raw, pre-processed uploads. */
+/** Path prefix the client uses for raw, pre-processed uploads in R2. */
 const RAW_PREFIX = 'raw/'
 
 /** Server-side compression target (matches old client-side settings). */
@@ -83,9 +82,8 @@ export async function createListingAction(
     // Sequential processing was risking Vercel's 10-second function timeout
     // on listings with 5+ photos. Parallel keeps total time bounded by the
     // single-slowest image instead of the sum.
-    const admin = createAdminClient()
     const results = await Promise.all(
-      rawPaths.map((rawPath, i) => processOneImage(admin, user.id, rawPath, i)),
+      rawPaths.map((rawPath, i) => processOneImage(user.id, rawPath, i)),
     )
 
     const firstError = results.find((r) => 'error' in r) as { error: string } | undefined
@@ -119,6 +117,11 @@ export async function createListingAction(
 
     if (insertError) return { error: `تعذّر إنشاء الإعلان: ${insertError.message}` }
 
+    // Purge storefront caches so the new listing appears immediately.
+    // These are no-ops for draft listings but harmless.
+    revalidatePath('/')
+    revalidatePath('/search')
+
     shouldRedirect = true
   } catch (err) {
     console.error('[createListingAction] unhandled error:', err)
@@ -132,25 +135,32 @@ export async function createListingAction(
 }
 
 /**
- * Download → Sharp resize/WebP → upload → delete temp.
+ * Download raw from R2 → Sharp resize/WebP → upload WebP to R2 → delete raw.
  * Returns the public URL of the processed image or an Arabic error message.
  */
 async function processOneImage(
-  admin: ReturnType<typeof createAdminClient>,
   userId: string,
   rawPath: string,
   index: number,
 ): Promise<{ url: string } | { error: string }> {
-  // 1. Download raw bytes.
-  const { data: rawBlob, error: dlError } = await admin.storage
-    .from(STORAGE_BUCKET)
-    .download(rawPath)
-
-  if (dlError || !rawBlob) {
-    return { error: `تعذّر قراءة الصورة رقم ${index + 1} من التخزين: ${dlError?.message ?? 'unknown'}` }
+  // 1. Download raw bytes from R2.
+  let inputBuffer: Buffer
+  try {
+    const response = await r2.send(
+      new GetObjectCommand({ Bucket: R2_BUCKET, Key: rawPath }),
+    )
+    const chunks: Uint8Array[] = []
+    for await (const chunk of response.Body as AsyncIterable<Uint8Array>) {
+      chunks.push(chunk)
+    }
+    inputBuffer = Buffer.concat(chunks)
+  } catch (err) {
+    return {
+      error: `تعذّر قراءة الصورة رقم ${index + 1} من التخزين: ${
+        err instanceof Error ? err.message : 'unknown'
+      }`,
+    }
   }
-
-  const inputBuffer = Buffer.from(await rawBlob.arrayBuffer())
 
   // 2. Resize + encode to WebP. EXIF/GPS stripped by default; .rotate() first
   //    so we honour orientation BEFORE the metadata is dropped.
@@ -172,25 +182,27 @@ async function processOneImage(
     }
   }
 
-  // 3. Upload processed WebP.
+  // 3. Upload processed WebP to R2.
   const finalPath = `${userId}/${cryptoRandomId()}.webp`
-  const { error: upError } = await admin.storage
-    .from(STORAGE_BUCKET)
-    .upload(finalPath, outputBuffer, {
-      contentType: 'image/webp',
-      upsert: false,
-    })
+  try {
+    await r2.send(
+      new PutObjectCommand({
+        Bucket:      R2_BUCKET,
+        Key:         finalPath,
+        Body:        outputBuffer,
+        ContentType: 'image/webp',
+      }),
+    )
+  } catch (err) {
+    return {
+      error: `فشل رفع الصورة رقم ${index + 1}: ${err instanceof Error ? err.message : 'unknown'}`,
+    }
+  }
 
-  if (upError) return { error: `فشل رفع الصورة رقم ${index + 1}: ${upError.message}` }
+  // 4. Clean up raw temp — non-fatal if it fails.
+  r2.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: rawPath })).catch(() => { /* ignore */ })
 
-  const { data: { publicUrl } } = admin.storage
-    .from(STORAGE_BUCKET)
-    .getPublicUrl(finalPath)
-
-  // 4. Clean up temp — non-fatal if it fails.
-  admin.storage.from(STORAGE_BUCKET).remove([rawPath]).catch(() => { /* ignore */ })
-
-  return { url: publicUrl }
+  return { url: r2PublicUrl(finalPath) }
 }
 
 /** Short random id for object names. */
@@ -216,6 +228,7 @@ export async function markAsSoldAction(productId: string, _?: FormData) {
 
   revalidatePath('/profile')
   revalidatePath('/')
+  revalidatePath('/search')
 }
 
 /* ── Admin helpers ───────────────────────────────────────────────────────── */
@@ -249,6 +262,7 @@ export async function approveProductAction(productId: string, _?: FormData) {
 
   revalidatePath('/admin')
   revalidatePath('/')
+  revalidatePath('/search')
 }
 
 export async function approveProductWithImagesAction(
@@ -268,6 +282,7 @@ export async function approveProductWithImagesAction(
 
   revalidatePath('/admin')
   revalidatePath('/')
+  revalidatePath('/search')
 }
 
 export async function rejectProductAction(productId: string, _?: FormData) {
@@ -282,4 +297,5 @@ export async function rejectProductAction(productId: string, _?: FormData) {
 
   revalidatePath('/admin')
   revalidatePath('/')
+  revalidatePath('/search')
 }

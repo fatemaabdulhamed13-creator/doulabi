@@ -6,7 +6,6 @@ import { createListingAction } from "@/app/actions/product";
 import PageHeader from "@/components/PageHeader";
 import { SUB_CATEGORIES } from "@/lib/subcategories";
 import { BRANDS, SEARCHABLE_BRANDS as _SEARCHABLE_BRANDS } from "@/lib/brands";
-import { createClient } from "@/lib/supabase/client";
 
 const MAX_RAW_FILE_BYTES = 20 * 1024 * 1024;
 
@@ -85,7 +84,6 @@ export default function SellForm() {
   const [description, setDescription] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const supabaseRef = useRef(createClient());
   const comboRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLLIElement | null)[]>([]);
 
@@ -123,13 +121,6 @@ export default function SellForm() {
       return;
     }
 
-    const supabase = supabaseRef.current;
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      setUploadError("انتهت الجلسة. يرجى تسجيل الدخول مرة أخرى.");
-      return;
-    }
-
     const baseIndex = entries.length;
     const placeholders: ImageEntry[] = files.map((f) => ({
       preview: URL.createObjectURL(f),
@@ -140,30 +131,56 @@ export default function SellForm() {
     setEntries((prev) => [...prev, ...placeholders]);
 
     await Promise.all(files.map(async (file, i) => {
-      const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-      const safeExt = ["jpg", "jpeg", "png", "webp"].includes(ext) ? ext : "jpg";
-      const uid = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
-      const rawPath = `raw/${user.id}/${uid}.${safeExt}`;
-
-      const { error } = await supabase.storage
-        .from("product-images")
-        .upload(rawPath, file, {
-          contentType: file.type || "image/jpeg",
-          upsert: false,
+      // 1. Ask the server for a presigned PUT URL
+      let presignedUrl: string;
+      let key: string;
+      try {
+        const res = await fetch(
+          `/api/upload-raw?filename=${encodeURIComponent(file.name)}&contentType=${encodeURIComponent(file.type || "image/jpeg")}`,
+        );
+        if (!res.ok) {
+          const { error } = await res.json().catch(() => ({ error: res.statusText }));
+          throw new Error(error ?? res.statusText);
+        }
+        ({ presignedUrl, key } = await res.json());
+      } catch (err) {
+        console.error("[SellForm] presign error:", err);
+        setEntries((prev) => {
+          const next = [...prev];
+          const slot = baseIndex + i;
+          if (!next[slot]) return prev;
+          next[slot] = { ...next[slot], uploading: false, error: true, rawPath: null };
+          return next;
         });
+        setUploadError("تعذّر بدء رفع الصورة. تحقق من اتصال الإنترنت ثم حاول مرة أخرى.");
+        return;
+      }
 
-      setEntries((prev) => {
-        const next = [...prev];
-        const slot = baseIndex + i;
-        if (!next[slot]) return prev;
-        next[slot] = error
-          ? { ...next[slot], uploading: false, error: true, rawPath: null }
-          : { ...next[slot], uploading: false, error: false, rawPath };
-        return next;
-      });
+      // 2. PUT directly to R2 via the presigned URL
+      try {
+        const putRes = await fetch(presignedUrl, {
+          method: "PUT",
+          body: file,
+          headers: { "Content-Type": file.type || "image/jpeg" },
+        });
+        if (!putRes.ok) throw new Error(`R2 PUT failed: ${putRes.status}`);
 
-      if (error) {
-        console.error("[SellForm] storage upload error:", error);
+        setEntries((prev) => {
+          const next = [...prev];
+          const slot = baseIndex + i;
+          if (!next[slot]) return prev;
+          next[slot] = { ...next[slot], uploading: false, error: false, rawPath: key };
+          return next;
+        });
+      } catch (err) {
+        console.error("[SellForm] R2 PUT error:", err);
+        setEntries((prev) => {
+          const next = [...prev];
+          const slot = baseIndex + i;
+          if (!next[slot]) return prev;
+          next[slot] = { ...next[slot], uploading: false, error: true, rawPath: null };
+          return next;
+        });
         setUploadError("تعذّر رفع الصورة. تحقق من اتصال الإنترنت ثم حاول مرة أخرى.");
       }
     }));
@@ -175,9 +192,8 @@ export default function SellForm() {
       if (!target) return prev;
       URL.revokeObjectURL(target.preview);
       if (target.rawPath) {
-        supabaseRef.current.storage
-          .from("product-images")
-          .remove([target.rawPath])
+        // Best-effort cleanup — R2 lifecycle rule also expires raw/ after 24h
+        fetch(`/api/upload-raw?key=${encodeURIComponent(target.rawPath)}`, { method: "DELETE" })
           .catch(() => { /* ignored */ });
       }
       return prev.filter((_, i) => i !== index);

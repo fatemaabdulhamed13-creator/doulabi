@@ -3,6 +3,7 @@ import Image from "next/image";
 import { ShoppingBag, Search } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import FavoriteButton from "@/components/FavoriteButton";
+import { FavoritesProvider } from "@/components/FavoritesProvider";
 import { BRAND_LABEL } from "@/lib/brands";
 
 /* ── Static data ─────────────────────────────────────────────────────────── */
@@ -78,16 +79,6 @@ export default async function Home({
     .range(start, end);
 
   const products = data ?? [];
-
-  const { data: { user } } = await supabase.auth.getUser();
-  let favIds = new Set<string>();
-  if (user) {
-    const { data: favs } = await supabase
-      .from("favorites")
-      .select("product_id")
-      .eq("user_id", user.id);
-    favIds = new Set((favs ?? []).map((f) => f.product_id as string));
-  }
 
   const hasPrev = page > 1;
   const hasNext = products.length === PAGE_SIZE; // if we got a full page, there's likely a next one
@@ -247,6 +238,7 @@ export default async function Home({
                 px-4 md:px-8 lg:px-16
                 pb-2
               ">
+                <FavoritesProvider>
                 {products.map((p) => {
                   const img = p.image_urls?.[0] ?? null;
                   return (
@@ -275,7 +267,6 @@ export default async function Home({
                         <div className="absolute top-2 left-2">
                           <FavoriteButton
                             productId={p.id}
-                            initialIsFavorited={favIds.has(p.id)}
                           />
                         </div>
                       </div>
@@ -301,6 +292,7 @@ export default async function Home({
                     </div>
                   );
                 })}
+                </FavoritesProvider>
               </div>
 
               {/* ── Pagination controls ──────────────────────────────── */}

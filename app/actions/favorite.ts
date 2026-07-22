@@ -32,4 +32,5 @@ export async function toggleFavoriteAction(productId: string, _?: FormData) {
   revalidatePath('/favorites')
   revalidatePath(`/product/${productId}`)
   revalidatePath('/')
+  revalidatePath('/search')
 }
