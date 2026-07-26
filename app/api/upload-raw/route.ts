@@ -7,8 +7,50 @@ import { r2, R2_BUCKET } from '@/lib/r2'
 const PRESIGN_EXPIRES_SECONDS = 900 // 15 minutes
 const ALLOWED_CONTENT_TYPES   = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'])
 
+/** POST /api/upload-raw  (multipart/form-data — field name: "file")
+ *  Accepts a pre-compressed image from the browser, uploads it directly to R2
+ *  from the server (no browser→R2 CORS required), and returns { key }.
+ */
+export async function POST(req: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  let formData: FormData
+  try {
+    formData = await req.formData()
+  } catch {
+    return NextResponse.json({ error: 'Invalid form data' }, { status: 400 })
+  }
+
+  const file = formData.get('file')
+  if (!(file instanceof File)) {
+    return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+  }
+
+  const contentType = file.type || 'image/webp'
+  const ext = contentType === 'image/png' ? 'png' : contentType === 'image/jpeg' ? 'jpg' : 'webp'
+  const uid = globalThis.crypto.randomUUID().replace(/-/g, '').slice(0, 16)
+  const key = `raw/${user.id}/${uid}.${ext}`
+
+  const buffer = await file.arrayBuffer()
+
+  await r2.send(new PutObjectCommand({
+    Bucket:        R2_BUCKET,
+    Key:           key,
+    Body:          Buffer.from(buffer),
+    ContentType:   contentType,
+    ContentLength: buffer.byteLength,
+  }))
+
+  return NextResponse.json({ key })
+}
+
 /** GET /api/upload-raw?filename=photo.jpg&contentType=image/jpeg
- *  Returns { presignedUrl, key } so the client can PUT directly to R2.
+ *  Returns { presignedUrl, key } — kept for compatibility but no longer used
+ *  by SellForm. The POST handler above is the primary upload path.
  */
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
@@ -24,7 +66,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unsupported content type' }, { status: 400 })
   }
 
-  // Derive safe extension from original filename
   const ext     = (filename.split('.').pop() || 'jpg').toLowerCase()
   const safeExt = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'].includes(ext) ? ext : 'jpg'
   const uid     = globalThis.crypto.randomUUID().replace(/-/g, '').slice(0, 16)
@@ -56,7 +97,6 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: 'key is required' }, { status: 400 })
   }
 
-  // Security: ensure the key belongs to the authenticated user
   if (!key.startsWith(`raw/${user.id}/`)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
@@ -66,7 +106,6 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[upload-raw DELETE]', err)
-    // Non-fatal — caller treats cleanup as best-effort
     return NextResponse.json({ error: 'Delete failed' }, { status: 500 })
   }
 }

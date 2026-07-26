@@ -59,6 +59,35 @@ const pill = (active: boolean) =>
     : "bg-card text-foreground border-border hover:border-primary/50"
   }`;
 
+/* ── Image compression (Canvas → WebP) ──────────────────────────────────── */
+
+/** Resizes and re-encodes a File to WebP so uploads stay well under 4 MB. */
+async function compressImage(file: File): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onerror = () => reject(new Error('Could not load image'));
+    img.onload = () => {
+      URL.revokeObjectURL(img.src);
+      const MAX = 1500;
+      let { naturalWidth: w, naturalHeight: h } = img;
+      if (w > MAX || h > MAX) {
+        if (w >= h) { h = Math.round((h / w) * MAX); w = MAX; }
+        else        { w = Math.round((w / h) * MAX); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width  = w;
+      canvas.height = h;
+      canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
+      canvas.toBlob(
+        (blob) => { blob ? resolve(blob) : reject(new Error('Compression failed')); },
+        'image/webp',
+        0.85,
+      );
+    };
+    img.src = URL.createObjectURL(file);
+  });
+}
+
 /* ── Form ────────────────────────────────────────────────────────────────── */
 
 export default function SellForm() {
@@ -131,39 +160,19 @@ export default function SellForm() {
     setEntries((prev) => [...prev, ...placeholders]);
 
     await Promise.all(files.map(async (file, i) => {
-      // 1. Ask the server for a presigned PUT URL
-      let presignedUrl: string;
-      let key: string;
       try {
-        const res = await fetch(
-          `/api/upload-raw?filename=${encodeURIComponent(file.name)}&contentType=${encodeURIComponent(file.type || "image/jpeg")}`,
-        );
+        // 1. Compress client-side (Canvas → WebP, ~150-400 KB)
+        const compressed = await compressImage(file);
+
+        // 2. POST to our own API route — same origin, no CORS
+        const fd = new FormData();
+        fd.append('file', compressed, 'image.webp');
+        const res = await fetch('/api/upload-raw', { method: 'POST', body: fd });
         if (!res.ok) {
           const { error } = await res.json().catch(() => ({ error: res.statusText }));
           throw new Error(error ?? res.statusText);
         }
-        ({ presignedUrl, key } = await res.json());
-      } catch (err) {
-        console.error("[SellForm] presign error:", err);
-        setEntries((prev) => {
-          const next = [...prev];
-          const slot = baseIndex + i;
-          if (!next[slot]) return prev;
-          next[slot] = { ...next[slot], uploading: false, error: true, rawPath: null };
-          return next;
-        });
-        setUploadError("تعذّر بدء رفع الصورة. تحقق من اتصال الإنترنت ثم حاول مرة أخرى.");
-        return;
-      }
-
-      // 2. PUT directly to R2 via the presigned URL
-      try {
-        const putRes = await fetch(presignedUrl, {
-          method: "PUT",
-          body: file,
-          headers: { "Content-Type": file.type || "image/jpeg" },
-        });
-        if (!putRes.ok) throw new Error(`R2 PUT failed: ${putRes.status}`);
+        const { key } = await res.json() as { key: string };
 
         setEntries((prev) => {
           const next = [...prev];
@@ -173,7 +182,7 @@ export default function SellForm() {
           return next;
         });
       } catch (err) {
-        console.error("[SellForm] R2 PUT error:", err);
+        console.error('[SellForm] upload error:', err);
         setEntries((prev) => {
           const next = [...prev];
           const slot = baseIndex + i;
@@ -181,7 +190,7 @@ export default function SellForm() {
           next[slot] = { ...next[slot], uploading: false, error: true, rawPath: null };
           return next;
         });
-        setUploadError("تعذّر رفع الصورة. تحقق من اتصال الإنترنت ثم حاول مرة أخرى.");
+        setUploadError('تعذّر رفع الصورة. تحقق من اتصال الإنترنت ثم حاول مرة أخرى.');
       }
     }));
   }
