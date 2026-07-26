@@ -7,45 +7,63 @@ import { r2, R2_BUCKET } from '@/lib/r2'
 const PRESIGN_EXPIRES_SECONDS = 900 // 15 minutes
 const ALLOWED_CONTENT_TYPES   = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'])
 
+/** Force Node.js runtime (not Edge) — required for Buffer and AWS SDK */
+export const runtime    = 'nodejs'
+export const dynamic    = 'force-dynamic'
+export const maxDuration = 60
+
 /** POST /api/upload-raw  (multipart/form-data — field name: "file")
  *  Accepts a pre-compressed image from the browser, uploads it directly to R2
  *  from the server (no browser→R2 CORS required), and returns { key }.
  */
 export async function POST(req: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  let formData: FormData
   try {
-    formData = await req.formData()
-  } catch {
-    return NextResponse.json({ error: 'Invalid form data' }, { status: 400 })
+    const supabase = await createClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    let formData: FormData
+    try {
+      formData = await req.formData()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      console.error('[upload-raw POST] formData parse failed:', msg)
+      return NextResponse.json({ error: `Form parse error: ${msg}` }, { status: 400 })
+    }
+
+    const file = formData.get('file')
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: 'No file provided (field name must be "file")' }, { status: 400 })
+    }
+
+    console.log(`[upload-raw POST] file: ${file.name}, size: ${file.size}, type: ${file.type}`)
+
+    const contentType = file.type || 'image/webp'
+    const ext = contentType === 'image/png' ? 'png' : contentType === 'image/jpeg' ? 'jpg' : 'webp'
+    const uid = globalThis.crypto.randomUUID().replace(/-/g, '').slice(0, 16)
+    const key = `raw/${user.id}/${uid}.${ext}`
+
+    const buffer = await file.arrayBuffer()
+    console.log(`[upload-raw POST] buffer size: ${buffer.byteLength}, key: ${key}`)
+
+    await r2.send(new PutObjectCommand({
+      Bucket:        R2_BUCKET,
+      Key:           key,
+      Body:          Buffer.from(buffer),
+      ContentType:   contentType,
+      ContentLength: buffer.byteLength,
+    }))
+
+    console.log(`[upload-raw POST] ✓ uploaded ${key}`)
+    return NextResponse.json({ key })
+
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    console.error('[upload-raw POST] unhandled error:', msg)
+    return NextResponse.json({ error: msg }, { status: 500 })
   }
-
-  const file = formData.get('file')
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: 'No file provided' }, { status: 400 })
-  }
-
-  const contentType = file.type || 'image/webp'
-  const ext = contentType === 'image/png' ? 'png' : contentType === 'image/jpeg' ? 'jpg' : 'webp'
-  const uid = globalThis.crypto.randomUUID().replace(/-/g, '').slice(0, 16)
-  const key = `raw/${user.id}/${uid}.${ext}`
-
-  const buffer = await file.arrayBuffer()
-
-  await r2.send(new PutObjectCommand({
-    Bucket:        R2_BUCKET,
-    Key:           key,
-    Body:          Buffer.from(buffer),
-    ContentType:   contentType,
-    ContentLength: buffer.byteLength,
-  }))
-
-  return NextResponse.json({ key })
 }
 
 /** GET /api/upload-raw?filename=photo.jpg&contentType=image/jpeg
