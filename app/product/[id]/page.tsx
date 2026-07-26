@@ -1,6 +1,6 @@
 import React from "react";
 import Link from "next/link";
-import { ChevronLeft, Ruler, Sparkles, Tag, Layers, Truck, Palette, MapPin } from "lucide-react";
+import { ChevronLeft, Pencil, Ruler, Sparkles, Tag, Layers, Truck, Palette, MapPin } from "lucide-react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import ProductImagePanel from "@/components/product-image-panel";
@@ -90,6 +90,7 @@ export default async function ProductPage({ params }: Props) {
 
   const seller         = product.profiles;
   const sellerInitial  = seller?.full_name.charAt(0) ?? "؟";
+  const isOwner        = !!user && user.id === product.seller_id;
   const whatsappHref   = seller?.whatsapp_number
     ? user
       ? `https://wa.me/${seller.whatsapp_number.replace(/\D/g, "")}?text=${encodeURIComponent(
@@ -204,19 +205,47 @@ export default async function ProductPage({ params }: Props) {
             </Link>
           </section>
 
-          {/* Desktop CTA */}
-          {whatsappHref && (
-            <div className="hidden md:block pt-6">
-              <WhatsAppCTA href={whatsappHref} />
-            </div>
-          )}
+          {/* Desktop CTA — WhatsApp + Edit (owner only) */}
+          <div className="hidden md:flex flex-col gap-3 pt-6">
+            {whatsappHref && <WhatsAppCTA href={whatsappHref} />}
+            {isOwner && (
+              <Link
+                href={`/product/${product.id}/edit`}
+                className="
+                  flex items-center justify-center gap-2
+                  w-full py-3.5 rounded-2xl
+                  border-2 border-primary text-primary font-bold text-[15px]
+                  hover:bg-primary/5 active:scale-[0.98]
+                  transition-all
+                "
+              >
+                <Pencil className="h-4 w-4 shrink-0" />
+                تعديل الإعلان
+              </Link>
+            )}
+          </div>
         </div>
       </div>
 
       {/* ── Mobile CTA — fixed, hidden on desktop ───────────────────── */}
-      {whatsappHref && (
-        <div className="md:hidden fixed bottom-20 left-0 right-0 z-40 bg-card border-t border-border px-4 py-3">
-          <WhatsAppCTA href={whatsappHref} />
+      {(whatsappHref || isOwner) && (
+        <div className="md:hidden fixed bottom-20 left-0 right-0 z-40 bg-card border-t border-border px-4 py-3 flex flex-col gap-2">
+          {whatsappHref && <WhatsAppCTA href={whatsappHref} />}
+          {isOwner && (
+            <Link
+              href={`/product/${product.id}/edit`}
+              className="
+                flex items-center justify-center gap-2
+                w-full py-3.5 rounded-2xl
+                border-2 border-primary text-primary font-bold text-[15px]
+                hover:bg-primary/5 active:scale-[0.98]
+                transition-all
+              "
+            >
+              <Pencil className="h-4 w-4 shrink-0" />
+              تعديل الإعلان
+            </Link>
+          )}
         </div>
       )}
     </div>

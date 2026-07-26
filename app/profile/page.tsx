@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { type LucideIcon, ChevronLeft, Pencil, UserCircle, Settings, LogOut, Tag } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import ListingPostedToast from "@/components/listing-posted-toast";
-import { markAsSoldAction } from "@/app/actions/product";
+import { markAsSoldAction, markAsAvailableAction } from "@/app/actions/product";
 import PageHeader from "@/components/PageHeader";
 
 /* ── Types ───────────────────────────────────────────────────────────────── */
@@ -179,8 +179,9 @@ export default async function ProfilePage({
             {products.map((product) => {
               const img        = product.image_urls[0] ?? null;
               const badge      = STATUS[product.status];
-              const soldAction = markAsSoldAction.bind(null, product.id);
-              const canLink    = product.status === "approved" && !product.is_sold;
+              const soldAction      = markAsSoldAction.bind(null, product.id);
+              const availableAction = markAsAvailableAction.bind(null, product.id);
+              const canLink         = product.status === "approved" && !product.is_sold;
 
               return (
                 <div key={product.id} className="flex flex-col gap-2.5">
@@ -241,22 +242,39 @@ export default async function ProfilePage({
                     </div>
                   )}
 
-                  {/* ── Mark-as-sold button ─────────────────────────── */}
-                  {!product.is_sold && product.status === "approved" && (
-                    <form action={soldAction}>
-                      <button
-                        type="submit"
-                        className="
-                          w-full py-2.5 rounded-xl
-                          border border-primary text-primary
-                          text-xs font-bold tracking-wide
-                          hover:bg-primary/5 active:scale-[0.98]
-                          transition-all
-                        "
-                      >
-                        تحديد كمباع
-                      </button>
-                    </form>
+                  {/* ── Mark-as-sold / Undo-sale toggle ─────────────── */}
+                  {product.status === "approved" && (
+                    product.is_sold ? (
+                      <form action={availableAction}>
+                        <button
+                          type="submit"
+                          className="
+                            w-full py-2.5 rounded-xl
+                            border border-emerald-500 text-emerald-600
+                            text-xs font-bold tracking-wide
+                            hover:bg-emerald-50 active:scale-[0.98]
+                            transition-all
+                          "
+                        >
+                          إلغاء البيع
+                        </button>
+                      </form>
+                    ) : (
+                      <form action={soldAction}>
+                        <button
+                          type="submit"
+                          className="
+                            w-full py-2.5 rounded-xl
+                            border border-primary text-primary
+                            text-xs font-bold tracking-wide
+                            hover:bg-primary/5 active:scale-[0.98]
+                            transition-all
+                          "
+                        >
+                          تحديد كمباع
+                        </button>
+                      </form>
+                    )
                   )}
                 </div>
               );

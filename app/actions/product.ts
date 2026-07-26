@@ -231,6 +231,81 @@ export async function markAsSoldAction(productId: string, _?: FormData) {
   revalidatePath('/search')
 }
 
+export async function markAsAvailableAction(productId: string, _?: FormData) {
+  const supabase = await createClient()
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) redirect('/')
+
+  const { error } = await supabase
+    .from('products')
+    .update({ is_sold: false })
+    .eq('id', productId)
+    .eq('seller_id', user.id)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/profile')
+  revalidatePath('/')
+  revalidatePath('/search')
+}
+
+export type UpdateListingState = { error: string } | null
+
+export async function updateProductAction(
+  productId: string,
+  _prevState: UpdateListingState,
+  formData: FormData,
+): Promise<UpdateListingState> {
+  try {
+    const supabase = await createClient()
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) return { error: 'يجب تسجيل الدخول أولاً.' }
+
+    // Verify ownership before update
+    const { data: existing } = await supabase
+      .from('products')
+      .select('seller_id')
+      .eq('id', productId)
+      .single()
+
+    if (!existing || existing.seller_id !== user.id) {
+      return { error: 'غير مصرح لك بتعديل هذا الإعلان.' }
+    }
+
+    // Parse editable fields
+    const price       = Number(formData.get('price'))
+    const condition   = String(formData.get('condition') ?? '').trim()
+    const size_value  = String(formData.get('size_value') ?? '').trim()
+    const description = String(formData.get('description') ?? '').trim() || null
+    const city        = String(formData.get('city') ?? '').trim() || null
+    const is_open_to_offers  = formData.get('is_open_to_offers')  === 'true'
+    const delivery_available = formData.get('delivery_available') === 'true'
+
+    if (isNaN(price) || price < 0) return { error: 'السعر غير صالح.' }
+    if (!condition)                 return { error: 'الرجاء اختيار حالة المنتج.' }
+    if (!size_value)                return { error: 'الرجاء اختيار المقاس.' }
+
+    const { error: updateError } = await supabase
+      .from('products')
+      .update({ price, condition, size_value, description, city, is_open_to_offers, delivery_available })
+      .eq('id', productId)
+      .eq('seller_id', user.id)
+
+    if (updateError) return { error: `تعذّر تحديث الإعلان: ${updateError.message}` }
+
+    revalidatePath('/profile')
+    revalidatePath('/')
+    revalidatePath('/search')
+    revalidatePath(`/product/${productId}`)
+  } catch (err) {
+    return { error: `حدث خطأ غير متوقع: ${err instanceof Error ? err.message : String(err)}` }
+  }
+
+  redirect(`/product/${productId}`)
+}
+
 /* ── Admin helpers ───────────────────────────────────────────────────────── */
 
 async function requireAdmin() {
