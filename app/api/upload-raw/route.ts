@@ -1,11 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { r2, R2_BUCKET } from '@/lib/r2'
 
 const PRESIGN_EXPIRES_SECONDS = 900 // 15 minutes
 const ALLOWED_CONTENT_TYPES   = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'])
+
+/**
+ * Resolves the authenticated user id from either a browser session cookie
+ * (web app) or an `Authorization: Bearer <access_token>` header (mobile app,
+ * which has no browser cookie jar to rely on).
+ */
+async function getAuthedUserId(req: NextRequest): Promise<string | null> {
+  const authHeader = req.headers.get('authorization')
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice('Bearer '.length)
+    const anon = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+    const { data, error } = await anon.auth.getUser(token)
+    return error ? null : data.user?.id ?? null
+  }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  return user?.id ?? null
+}
 
 /** Force Node.js runtime (not Edge) — required for Buffer and AWS SDK */
 export const runtime    = 'nodejs'
@@ -67,13 +90,13 @@ export async function POST(req: NextRequest) {
 }
 
 /** GET /api/upload-raw?filename=photo.jpg&contentType=image/jpeg
- *  Returns { presignedUrl, key } — kept for compatibility but no longer used
- *  by SellForm. The POST handler above is the primary upload path.
+ *  Returns { presignedUrl, key } — the primary upload path for the mobile app,
+ *  which uploads directly to R2 with this URL instead of proxying bytes
+ *  through this server (kept for web SellForm compatibility too).
  */
 export async function GET(req: NextRequest) {
-  const supabase = await createClient()
-  const { data: { user }, error: authError } = await supabase.auth.getUser()
-  if (authError || !user) {
+  const userId = await getAuthedUserId(req)
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -87,7 +110,7 @@ export async function GET(req: NextRequest) {
   const ext     = (filename.split('.').pop() || 'jpg').toLowerCase()
   const safeExt = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'].includes(ext) ? ext : 'jpg'
   const uid     = globalThis.crypto.randomUUID().replace(/-/g, '').slice(0, 16)
-  const key     = `raw/${user.id}/${uid}.${safeExt}`
+  const key     = `raw/${userId}/${uid}.${safeExt}`
 
   const command = new PutObjectCommand({
     Bucket:      R2_BUCKET,
