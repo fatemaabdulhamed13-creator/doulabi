@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowRight, Bell, ChevronLeft, FileText,
-  Lock, Mail, MessageCircle, Trash2, AlertTriangle,
+  Lock, Mail, MessageCircle, ShieldCheck, Trash2, AlertTriangle,
 } from "lucide-react";
 import { type LucideIcon } from "lucide-react";
 import { deleteAccountAction } from "@/app/actions/auth";
@@ -232,6 +232,11 @@ export default function SettingsClient({ email }: { email: string }) {
                   icon={FileText}
                   label="الشروط والأحكام"
                   href="/terms"
+                />
+                <RowItem
+                  icon={ShieldCheck}
+                  label="سياسة الخصوصية"
+                  href="/privacy"
                 />
               </div>
             </div>

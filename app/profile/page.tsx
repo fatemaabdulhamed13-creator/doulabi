@@ -64,15 +64,20 @@ export default async function ProfilePage({
 
   if (!profile) redirect("/login");
 
-  /* ── Counts for stats row (always total, not paged) ─────────────────── */
-  const { data: allProductsData } = await supabase
-    .from("products")
-    .select("id, is_sold")
-    .eq("seller_id", user.id)
-    .returns<{ id: string; is_sold: boolean }[]>();
-
-  const allProducts = allProductsData ?? [];
-  const totalSold   = allProducts.filter((p) => p.is_sold).length;
+  /* ── Counts for stats row — head:true means zero row data transferred ── */
+  const [{ count: totalCount }, { count: soldCount }] = await Promise.all([
+    supabase
+      .from("products")
+      .select("*", { count: "exact", head: true })
+      .eq("seller_id", user.id),
+    supabase
+      .from("products")
+      .select("*", { count: "exact", head: true })
+      .eq("seller_id", user.id)
+      .eq("is_sold", true),
+  ]);
+  const totalListings = totalCount ?? 0;
+  const totalSold     = soldCount  ?? 0;
 
   /* ── Paged query for the grid ────────────────────────────────────────── */
   const { data: productsData } = await supabase
@@ -135,7 +140,7 @@ export default async function ProfilePage({
         <div className="md:max-w-4xl mx-auto px-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-card rounded-2xl border border-border p-5 text-center">
-              <p className="text-3xl font-black text-primary mb-1">{allProducts.length}</p>
+              <p className="text-3xl font-black text-primary mb-1">{totalListings}</p>
               <p className="text-xs font-semibold text-muted-foreground">معروضاتي</p>
             </div>
             <div className="bg-card rounded-2xl border border-border p-5 text-center">

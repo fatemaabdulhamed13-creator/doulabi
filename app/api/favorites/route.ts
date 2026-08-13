@@ -22,7 +22,8 @@ export async function GET() {
   const { data } = await supabase
     .from("favorites")
     .select("product_id")
-    .eq("user_id", user.id);
+    .eq("user_id", user.id)
+    .limit(200);
 
   const ids = (data ?? []).map((r) => r.product_id as string);
   return NextResponse.json({ ids });

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ShoppingBag } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { BRAND_LABEL } from "@/lib/brands";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -36,6 +37,7 @@ export default async function PublicProfilePage({ params }: Props) {
     .eq("status", "approved")
     .eq("is_sold", false)
     .order("created_at", { ascending: false })
+    .limit(24)
     .returns<Listing[]>();
 
   const listings = data ?? [];
@@ -92,7 +94,7 @@ export default async function PublicProfilePage({ params }: Props) {
                   </div>
                   <div className="flex flex-col gap-1 px-0.5">
                     <p className="text-[10px] font-bold text-primary uppercase tracking-widest">
-                      {p.brand}
+                      {BRAND_LABEL[p.brand] ?? p.brand}
                     </p>
                     <p className="text-sm font-semibold text-gray-900 line-clamp-1">{p.title}</p>
                     <div className="flex items-center justify-between mt-0.5">

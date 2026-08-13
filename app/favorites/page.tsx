@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import FavoriteButton from "@/components/FavoriteButton";
 import PageHeader from "@/components/PageHeader";
+import { BRAND_LABEL } from "@/lib/brands";
 
 type FavoriteRow = {
   product_id: string;
@@ -86,7 +87,7 @@ export default async function FavoritesPage({
 
                   <Link href={`/product/${item.id}`} className="flex flex-col gap-1 px-0.5">
                     <p className="text-[10px] font-bold text-primary uppercase tracking-widest">
-                      {item.brand}
+                      {BRAND_LABEL[item.brand] ?? item.brand}
                     </p>
                     <p className="text-sm font-semibold text-foreground line-clamp-1">
                       {item.title}

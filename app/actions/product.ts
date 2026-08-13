@@ -1,6 +1,6 @@
 'use server'
 
-import { revalidatePath } from 'next/cache'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { redirect } from 'next/navigation'
 import sharp from 'sharp'
 import { GetObjectCommand, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
@@ -119,6 +119,7 @@ export async function createListingAction(
 
     // Purge storefront caches so the new listing appears immediately.
     // These are no-ops for draft listings but harmless.
+    revalidateTag('products', 'default')
     revalidatePath('/')
     revalidatePath('/search')
 
@@ -226,6 +227,7 @@ export async function markAsSoldAction(productId: string, _?: FormData) {
 
   if (error) throw new Error(error.message)
 
+  revalidateTag('products', 'default')
   revalidatePath('/profile')
   revalidatePath('/')
   revalidatePath('/search')
@@ -245,6 +247,7 @@ export async function markAsAvailableAction(productId: string, _?: FormData) {
 
   if (error) throw new Error(error.message)
 
+  revalidateTag('products', 'default')
   revalidatePath('/profile')
   revalidatePath('/')
   revalidatePath('/search')
@@ -295,6 +298,7 @@ export async function updateProductAction(
 
     if (updateError) return { error: `تعذّر تحديث الإعلان: ${updateError.message}` }
 
+    revalidateTag('products', 'default')
     revalidatePath('/profile')
     revalidatePath('/')
     revalidatePath('/search')
@@ -335,6 +339,7 @@ export async function approveProductAction(productId: string, _?: FormData) {
 
   if (error) throw new Error(error.message)
 
+  revalidateTag('products', 'default')
   revalidatePath('/admin')
   revalidatePath('/')
   revalidatePath('/search')
@@ -355,6 +360,7 @@ export async function approveProductWithImagesAction(
 
   if (error) throw new Error(error.message)
 
+  revalidateTag('products', 'default')
   revalidatePath('/admin')
   revalidatePath('/')
   revalidatePath('/search')
@@ -370,6 +376,7 @@ export async function rejectProductAction(productId: string, _?: FormData) {
 
   if (error) throw new Error(error.message)
 
+  revalidateTag('products', 'default')
   revalidatePath('/admin')
   revalidatePath('/')
   revalidatePath('/search')

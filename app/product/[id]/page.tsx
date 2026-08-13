@@ -4,6 +4,7 @@ import { ChevronLeft, Pencil, Ruler, Sparkles, Tag, Layers, Truck, Palette, MapP
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import ProductImagePanel from "@/components/product-image-panel";
+import { BRAND_LABEL } from "@/lib/brands";
 
 type Props = {
   params: Promise<{ id: string }>;
@@ -123,7 +124,7 @@ export default async function ProductPage({ params }: Props) {
           {/* Product info */}
           <section className="py-5 border-b border-border">
             <p className="text-[11px] font-bold text-primary uppercase tracking-widest mb-1.5">
-              {product.brand}
+              {BRAND_LABEL[product.brand] ?? product.brand}
             </p>
             <h1 className="text-xl font-bold text-foreground leading-snug mb-3">
               {product.title}
@@ -144,7 +145,7 @@ export default async function ProductPage({ params }: Props) {
                 { label: "المقاس",  value: product.size_value, Icon: Ruler     },
                 { label: "الحالة",  value: product.condition,  Icon: Sparkles  },
                 { label: "الفئة",   value: product.category,   Icon: Layers    },
-                { label: "الماركة", value: product.brand,       Icon: Tag       },
+                { label: "الماركة", value: BRAND_LABEL[product.brand] ?? product.brand, Icon: Tag },
                 ...(product.color ? [{ label: "اللون",   value: product.color, Icon: Palette }] : []),
                 ...(product.city  ? [{ label: "المدينة", value: product.city,  Icon: MapPin  }] : []),
               ] as { label: string; value: string; Icon: React.ElementType }[]).map(({ label, value, Icon }) => (

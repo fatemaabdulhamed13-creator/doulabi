@@ -29,6 +29,7 @@ export default async function AdminPage() {
     `)
     .eq('status', 'pending')
     .order('created_at', { ascending: false })
+    .limit(50)
     .returns<PendingProduct[]>();
 
   const pending = products ?? [];

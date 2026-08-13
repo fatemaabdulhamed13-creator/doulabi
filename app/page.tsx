@@ -1,7 +1,9 @@
 import Link from "next/link";
 import Image from "next/image";
+import { unstable_cache } from "next/cache";
 import { ShoppingBag, Search } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 import FavoriteButton from "@/components/FavoriteButton";
 import { FavoritesProvider } from "@/components/FavoritesProvider";
 import { BRAND_LABEL } from "@/lib/brands";
@@ -71,14 +73,28 @@ export default async function Home({
 
   const supabase = await createClient();
 
-  const { data } = await supabase
-    .from("products")
-    .select("id, title, price, brand, size_value, image_urls")
-    .eq("status", "approved")
-    .order("created_at", { ascending: false })
-    .range(start, end);
+  // Wrap in unstable_cache: results are served from the Next.js server cache.
+  // Only hits Supabase when the cache is cold or after revalidateTag('products').
+  const getHomeProducts = unstable_cache(
+    async () => {
+      // Must not use the cookie-based server client here — unstable_cache()
+      // forbids accessing dynamic data sources like cookies() inside its scope.
+      const client = createPublicClient();
+      const { data } = await client
+        .from("products")
+        .select("id, title, price, brand, size_value, image_urls")
+        .eq("status", "approved")
+        .order("created_at", { ascending: false })
+        .range(start, end);
+      return data ?? [];
+    },
+    [`home-products-p${page}`],
+    { tags: ["products"], revalidate: 300 }, // max 5 min stale; or instant via revalidateTag
+  );
 
-  const products = data ?? [];
+  const products = await getHomeProducts();
+  // Keep a reference to supabase for any auth-gated work below (currently unused on home).
+  void supabase;
 
   const hasPrev = page > 1;
   const hasNext = products.length === PAGE_SIZE; // if we got a full page, there's likely a next one
