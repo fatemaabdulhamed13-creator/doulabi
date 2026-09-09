@@ -1,6 +1,7 @@
 'use server'
 
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
@@ -47,6 +48,31 @@ export async function logInAction(
   if (error) return { error: error.message }
 
   redirect('/')
+}
+
+// ── Forgot password (send recovery email) ───────────────────────────────────
+
+export async function forgotPasswordAction(
+  _prevState: PasswordState,
+  formData: FormData,
+): Promise<PasswordState> {
+  const email = String(formData.get('email') ?? '').trim()
+
+  if (!email) return { error: 'يرجى إدخال بريدك الإلكتروني.' }
+
+  const supabase = await createClient()
+
+  // Origin header is present because this action runs as a same-origin
+  // fetch POST triggered by the <form action={...}> submission.
+  const origin = (await headers()).get('origin') ?? process.env.NEXT_PUBLIC_SITE_URL ?? ''
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${origin}/reset-password`,
+  })
+
+  if (error) return { error: error.message }
+
+  return { success: true }
 }
 
 export async function signOutAction(): Promise<never> {

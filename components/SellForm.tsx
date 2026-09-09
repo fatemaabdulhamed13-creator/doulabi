@@ -5,7 +5,7 @@ import { Camera, ChevronDown, Loader2, Search, ShieldAlert, X } from "lucide-rea
 import { createListingAction } from "@/app/actions/product";
 import PageHeader from "@/components/PageHeader";
 import { SUB_CATEGORIES } from "@/lib/subcategories";
-import { BRANDS, SEARCHABLE_BRANDS as _SEARCHABLE_BRANDS } from "@/lib/brands";
+import { BRANDS, BRAND_LABEL, SEARCHABLE_BRANDS as _SEARCHABLE_BRANDS } from "@/lib/brands";
 
 const MAX_RAW_FILE_BYTES = 20 * 1024 * 1024;
 
@@ -712,7 +712,12 @@ export default function SellForm() {
               </div>
 
               {/* ── Hidden inputs ──────────────────────────────────────── */}
-              <input type="hidden" name="brand" value={brand} />
+              {/*
+                `brand` state stays the English key internally (stable id for
+                pills/combobox/BRANDS_MAP lookups) but we submit the Arabic
+                label — the DB stores brand names in Arabic.
+              */}
+              <input type="hidden" name="brand" value={BRAND_LABEL[brand] ?? brand} />
               <input type="hidden" name="subcategory" value={subcategory} />
               <input type="hidden" name="size_type" value={sizeType} />
               {isOneSize && <input type="hidden" name="size_value" value="مقاس واحد" />}

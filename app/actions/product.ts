@@ -312,7 +312,7 @@ export async function updateProductAction(
 
 /* ── Admin helpers ───────────────────────────────────────────────────────── */
 
-async function requireAdmin() {
+export async function requireAdmin() {
   const supabase = await createClient()
 
   const { data: { user }, error } = await supabase.auth.getUser()

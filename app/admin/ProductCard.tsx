@@ -174,12 +174,13 @@ export function ProductCard({ product }: { product: PendingProduct }) {
                 disabled={isPending}
                 className={SELECT_CLS}
               >
-                {/* Keep the submitted value as an option even if it's not in BRANDS */}
-                {!BRANDS.some((b) => b.value === brand) && (
+                {/* Keep the submitted value as an option even if it's not in BRANDS
+                    — brand names are stored in Arabic, so match against `label`. */}
+                {!BRANDS.some((b) => b.label === brand) && (
                   <option value={brand}>{brand}</option>
                 )}
                 {BRANDS.map((b) => (
-                  <option key={b.value} value={b.value}>{b.label} — {b.value}</option>
+                  <option key={b.value} value={b.label}>{b.label}</option>
                 ))}
               </select>
             </div>
