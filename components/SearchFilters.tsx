@@ -4,11 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
 import { ChevronDown, X } from "lucide-react";
 import { BRAND_LABEL, SEARCHABLE_BRANDS } from "@/lib/brands";
-
-const CATEGORIES = [
-  "فساتين", "أحذية", "حقائب", "إكسسوارات",
-  "ملابس رجالية", "ملابس أطفال", "ملابس رياضية", "أخرى",
-];
+import { CATEGORIES } from "@/lib/categories";
 
 
 const LETTER_SIZES       = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "XXXL"];

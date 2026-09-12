@@ -5,6 +5,7 @@ import { Camera, ChevronDown, Loader2, Search, ShieldAlert, X } from "lucide-rea
 import { createListingAction } from "@/app/actions/product";
 import PageHeader from "@/components/PageHeader";
 import { SUB_CATEGORIES } from "@/lib/subcategories";
+import { CATEGORIES } from "@/lib/categories";
 import { BRANDS, BRAND_LABEL, SEARCHABLE_BRANDS as _SEARCHABLE_BRANDS } from "@/lib/brands";
 
 const MAX_RAW_FILE_BYTES = 20 * 1024 * 1024;
@@ -17,11 +18,6 @@ type ImageEntry = {
 };
 
 /* ── Data ────────────────────────────────────────────────────────────────── */
-
-const CATEGORIES = [
-  "فساتين", "أحذية", "حقائب", "إكسسوارات",
-  "ملابس رجالية", "ملابس أطفال", "ملابس رياضية", "ملابس تقليدية", "أخرى",
-];
 
 const CONDITIONS = ["جديد بالعلامة", "كالجديد", "مستعمل - حالة جيدة", "مستعمل - حالة مقبولة"];
 
@@ -100,6 +96,7 @@ export default function SellForm() {
   const [price, setPrice] = useState("");
   const [negotiable, setNegotiable] = useState(false);
   const [category, setCategory] = useState("");
+  const [categoryOpen, setCategoryOpen] = useState(false);
   const [subcategory, setSubcategory] = useState("");
   const [brand, setBrand] = useState("");
   const [brandQuery, setBrandQuery] = useState("");
@@ -114,15 +111,19 @@ export default function SellForm() {
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const comboRef = useRef<HTMLDivElement>(null);
+  const categoryRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<(HTMLLIElement | null)[]>([]);
 
   const isUploading = entries.some((e) => e.uploading);
 
-  /* ── Combobox: close on outside click ─────────────────────────────────── */
+  /* ── Combobox / category listbox: close on outside click ─────────────── */
   useEffect(() => {
     function onMouseDown(e: MouseEvent) {
       if (comboRef.current && !comboRef.current.contains(e.target as Node)) {
         setComboOpen(false);
+      }
+      if (categoryRef.current && !categoryRef.current.contains(e.target as Node)) {
+        setCategoryOpen(false);
       }
     }
     document.addEventListener("mousedown", onMouseDown);
@@ -215,6 +216,7 @@ export default function SellForm() {
 
   function handleCategoryChange(newCat: string) {
     setCategory(newCat);
+    setCategoryOpen(false);
     setSubcategory("");
     setBrand("");
     setBrandQuery("");
@@ -408,22 +410,50 @@ export default function SellForm() {
                   />
                 </div>
 
-                {/* Category */}
+                {/* Category — custom listbox (not a native <select>) so the
+                    open list can be capped with max-h-60/overflow-y-auto;
+                    native <select> popups ignore CSS max-height entirely. */}
                 <div>
                   <label htmlFor="category" className={fieldLabel}>الفئة</label>
-                  <div className="relative">
-                    <select
-                      id="category" name="category"
-                      value={category} onChange={(e) => handleCategoryChange(e.target.value)}
-                      dir="rtl" required
-                      className={`${input} appearance-none cursor-pointer`}
+                  <div ref={categoryRef} className="relative">
+                    <button
+                      type="button"
+                      id="category"
+                      onClick={() => setCategoryOpen((o) => !o)}
+                      onKeyDown={(e) => { if (e.key === "Escape") setCategoryOpen(false); }}
+                      aria-haspopup="listbox"
+                      aria-expanded={categoryOpen}
+                      className={`${input} flex items-center justify-between gap-2 text-right`}
                     >
-                      <option value="" disabled>اختر الفئة</option>
-                      {CATEGORIES.map((c) => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                    <ChevronDown className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                      <span className={category ? "text-foreground" : "text-muted-foreground"}>
+                        {category || "اختر الفئة"}
+                      </span>
+                      <ChevronDown
+                        className={`h-4 w-4 text-muted-foreground shrink-0 transition-transform ${categoryOpen ? "rotate-180" : ""}`}
+                      />
+                    </button>
+
+                    {categoryOpen && (
+                      <ul
+                        role="listbox"
+                        className="absolute top-full right-0 left-0 mt-1 bg-white border border-border rounded-xl shadow-lg max-h-60 overflow-y-auto z-20"
+                      >
+                        {CATEGORIES.map((c) => (
+                          <li
+                            key={c}
+                            role="option"
+                            aria-selected={category === c}
+                            onMouseDown={(e) => { e.preventDefault(); handleCategoryChange(c); }}
+                            className={`
+                              px-4 py-2.5 text-sm cursor-pointer select-none hover:bg-muted
+                              ${category === c ? "text-primary font-semibold bg-primary/5" : "text-foreground"}
+                            `}
+                          >
+                            {c}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                   </div>
                 </div>
 
@@ -717,6 +747,7 @@ export default function SellForm() {
                 pills/combobox/BRANDS_MAP lookups) but we submit the Arabic
                 label — the DB stores brand names in Arabic.
               */}
+              <input type="hidden" name="category" value={category} />
               <input type="hidden" name="brand" value={BRAND_LABEL[brand] ?? brand} />
               <input type="hidden" name="subcategory" value={subcategory} />
               <input type="hidden" name="size_type" value={sizeType} />
