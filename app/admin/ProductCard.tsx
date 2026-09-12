@@ -1,13 +1,14 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useRef, useState, useTransition } from 'react'
 import Image from 'next/image'
-import { CheckCircle, XCircle } from 'lucide-react'
+import { CheckCircle, ChevronDown, XCircle } from 'lucide-react'
 import {
   approveProductWithImagesAction,
   rejectProductAction,
 } from '@/app/actions/product'
 import { BRANDS } from '@/lib/brands'
+import { CATEGORIES } from '@/lib/categories'
 
 export type PendingProduct = {
   id:               string
@@ -27,12 +28,6 @@ export type PendingProduct = {
   } | null
 }
 
-/* ── Canonical category list (mirrors SellForm) ─────────────────────────── */
-const CATEGORIES = [
-  'فساتين', 'أحذية', 'حقائب', 'إكسسوارات',
-  'ملابس رجالية', 'ملابس أطفال', 'ملابس رياضية', 'ملابس تقليدية', 'أخرى',
-]
-
 /* ── Shared select style ────────────────────────────────────────────────── */
 const SELECT_CLS = `
   w-full rounded-lg border border-border bg-background
@@ -46,6 +41,23 @@ export function ProductCard({ product }: { product: PendingProduct }) {
   const [category, setCategory] = useState(product.category)
   const [brand,    setBrand]    = useState(product.brand)
   const [isPending, startTransition] = useTransition()
+
+  // Custom category listbox (not a native <select>) so the expanded list can
+  // be capped with max-h-60/overflow-y-auto — native <select> popups ignore
+  // CSS max-height entirely, mirroring the pattern in SellForm.
+  const [categoryOpen, setCategoryOpen] = useState(false)
+  const categoryRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!categoryOpen) return
+    function onMouseDown(e: MouseEvent) {
+      if (categoryRef.current && !categoryRef.current.contains(e.target as Node)) {
+        setCategoryOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onMouseDown)
+    return () => document.removeEventListener('mousedown', onMouseDown)
+  }, [categoryOpen])
 
   function moveImage(idx: number, delta: -1 | 1) {
     const next = [...images]
@@ -69,11 +81,14 @@ export function ProductCard({ product }: { product: PendingProduct }) {
   })
 
   return (
-    <article className="bg-card border border-border rounded-2xl overflow-hidden flex flex-col gap-0">
+    // Note: no overflow-hidden here (moved to the image strip below) — the
+    // category listbox is an absolutely-positioned child further down the
+    // tree, and an overflow-hidden ancestor would clip its expanded list.
+    <article className="bg-card border border-border rounded-2xl flex flex-col gap-0">
 
       {/* ── Image strip ──────────────────────────────────────────────────── */}
       {images.length > 0 ? (
-        <div className="flex gap-3 overflow-x-auto p-4 bg-muted/40 border-b border-border scrollbar-none">
+        <div className="flex gap-3 overflow-x-auto rounded-t-2xl p-4 bg-muted/40 border-b border-border scrollbar-none">
           {images.map((url, idx) => (
             <div
               key={url + idx}
@@ -124,7 +139,7 @@ export function ProductCard({ product }: { product: PendingProduct }) {
           ))}
         </div>
       ) : (
-        <div className="h-20 bg-muted/40 border-b border-border flex items-center justify-center">
+        <div className="h-20 rounded-t-2xl bg-muted/40 border-b border-border flex items-center justify-center">
           <span className="text-xs text-muted-foreground">لا توجد صور</span>
         </div>
       )}
@@ -152,16 +167,47 @@ export function ProductCard({ product }: { product: PendingProduct }) {
               <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                 الفئة
               </label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                disabled={isPending}
-                className={SELECT_CLS}
-              >
-                {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+              <div ref={categoryRef} className="relative">
+                <button
+                  type="button"
+                  onClick={() => setCategoryOpen((o) => !o)}
+                  disabled={isPending}
+                  aria-haspopup="listbox"
+                  aria-expanded={categoryOpen}
+                  className={`${SELECT_CLS} flex items-center justify-between gap-2 text-right`}
+                >
+                  <span className="truncate">{category}</span>
+                  <ChevronDown
+                    className={`h-3.5 w-3.5 text-muted-foreground shrink-0 transition-transform ${categoryOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+
+                {categoryOpen && (
+                  <ul
+                    role="listbox"
+                    className="absolute top-full right-0 left-0 mt-1 bg-white border border-border rounded-lg shadow-lg max-h-60 overflow-y-auto z-20"
+                  >
+                    {CATEGORIES.map((c) => (
+                      <li
+                        key={c}
+                        role="option"
+                        aria-selected={category === c}
+                        onMouseDown={(e) => {
+                          e.preventDefault()
+                          setCategory(c)
+                          setCategoryOpen(false)
+                        }}
+                        className={`
+                          px-2.5 py-1.5 text-sm cursor-pointer select-none hover:bg-muted
+                          ${category === c ? 'text-primary font-semibold bg-primary/5' : 'text-foreground'}
+                        `}
+                      >
+                        {c}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
 
             <div className="flex flex-col gap-1">
