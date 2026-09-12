@@ -2,7 +2,6 @@ import Link from "next/link";
 import Image from "next/image";
 import { unstable_cache } from "next/cache";
 import { ShoppingBag, Search } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
 import { createPublicClient } from "@/lib/supabase/public";
 import FavoriteButton from "@/components/FavoriteButton";
 import { FavoritesProvider } from "@/components/FavoritesProvider";
@@ -71,8 +70,6 @@ export default async function Home({
   const start = (page - 1) * PAGE_SIZE;
   const end   = page * PAGE_SIZE - 1;
 
-  const supabase = await createClient();
-
   // Wrap in unstable_cache: results are served from the Next.js server cache.
   // Only hits Supabase when the cache is cold or after revalidateTag('products').
   const getHomeProducts = unstable_cache(
@@ -93,8 +90,6 @@ export default async function Home({
   );
 
   const products = await getHomeProducts();
-  // Keep a reference to supabase for any auth-gated work below (currently unused on home).
-  void supabase;
 
   const hasPrev = page > 1;
   const hasNext = products.length === PAGE_SIZE; // if we got a full page, there's likely a next one

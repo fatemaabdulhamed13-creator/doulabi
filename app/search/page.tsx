@@ -1,8 +1,9 @@
 import { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { unstable_cache } from "next/cache";
 import { ShoppingBag } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 import SearchFilters from "@/components/SearchFilters";
 import MobileSearchBar from "@/components/MobileSearchBar";
 import PageHeader from "@/components/PageHeader";
@@ -60,31 +61,57 @@ export default async function SearchPage({ searchParams }: Props) {
     return `/search?${params.toString()}`;
   };
 
-  const supabase = await createClient();
+  // Wrap in unstable_cache, keyed by every filter dimension + page number, so
+  // repeat requests for the same search/category URL (the common case under
+  // a traffic spike) are served from the Next.js server cache instead of
+  // hitting Postgres live. Must use the cookie-free public client — cookies()
+  // is a dynamic API and unstable_cache() forbids it inside its scope.
+  const getSearchProducts = unstable_cache(
+    async () => {
+      const client = createPublicClient();
 
-  let query = supabase
-    .from("products")
-    .select("id, title, price, brand, size_value, image_urls")
-    .eq("status", "approved")
-    .eq("is_sold", false);
+      let query = client
+        .from("products")
+        .select("id, title, price, brand, size_value, image_urls")
+        .eq("status", "approved")
+        .eq("is_sold", false);
 
-  if (q)           query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`);
-  if (category)    query = query.eq("category",           category);
-  if (subcategory) query = query.eq("subcategory", subcategory);
-  if (size)        query = query.eq("size_value",          size);
-  if (minPrice)    query = query.gte("price",              minPrice);
-  if (maxPrice)    query = query.lte("price",              maxPrice);
-  if (color)       query = query.eq("color",               color);
-  if (city)        query = query.eq("city",                city);
-  if (brand)       query = query.eq("brand",               brand);
-  if (delivery)    query = query.eq("delivery_available",  true);
+      if (q)           query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`);
+      if (category)    query = query.eq("category",           category);
+      if (subcategory) query = query.eq("subcategory", subcategory);
+      if (size)        query = query.eq("size_value",          size);
+      if (minPrice)    query = query.gte("price",              minPrice);
+      if (maxPrice)    query = query.lte("price",              maxPrice);
+      if (color)       query = query.eq("color",               color);
+      if (city)        query = query.eq("city",                city);
+      if (brand)       query = query.eq("brand",               brand);
+      if (delivery)    query = query.eq("delivery_available",  true);
 
-  const { data } = await query
-    .order("created_at", { ascending: false })
-    .range(start, end)
-    .returns<Product[]>();
+      const { data } = await query
+        .order("created_at", { ascending: false })
+        .range(start, end)
+        .returns<Product[]>();
 
-  const products    = data ?? [];
+      return data ?? [];
+    },
+    [
+      "search-products",
+      `q:${q ?? ""}`,
+      `category:${category ?? ""}`,
+      `subcategory:${subcategory ?? ""}`,
+      `size:${size ?? ""}`,
+      `minPrice:${minPrice ?? ""}`,
+      `maxPrice:${maxPrice ?? ""}`,
+      `color:${color ?? ""}`,
+      `city:${city ?? ""}`,
+      `brand:${brand ?? ""}`,
+      `delivery:${delivery}`,
+      `page:${page}`,
+    ],
+    { tags: ["products"], revalidate: 60 },
+  );
+
+  const products = await getSearchProducts();
   const isFiltered  = !!(q || category || size || minPrice || maxPrice || color || city || brand || delivery);
   const hasPrev     = page > 1;
   const hasNext     = products.length === PAGE_SIZE;
