@@ -13,7 +13,7 @@ export default async function EditListingPage({ params }: Props) {
 
   const { data: product } = await supabase
     .from("products")
-    .select("id, seller_id, title, price, brand, condition, description, city, is_open_to_offers, delivery_available, status, size_type, size_value")
+    .select("id, seller_id, title, price, category, brand, condition, description, city, is_open_to_offers, delivery_available, status, size_type, size_value")
     .eq("id", id)
     .single();
 

@@ -20,10 +20,21 @@ type ImageEntry = {
 /* ── Data ────────────────────────────────────────────────────────────────── */
 
 const CONDITIONS = ["جديد بالعلامة", "كالجديد", "مستعمل - حالة جيدة", "مستعمل - حالة مقبولة"];
+// عطور و تجميل ("Perfumes & Beauty") isn't clothing — sealed/opened/used
+// reads correctly for a bottle/jar in a way the clothing condition set
+// doesn't.
+const BEAUTY_CONDITIONS = ["جديد مغلق", "جديد مفتوح", "مستعمل"];
 
 const LETTER_SIZES = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "XXXL"];
 const CLOTHING_NUM_SIZES = Array.from({ length: 12 }, (_, i) => String(34 + i * 2));
 const SHOE_SIZES = Array.from({ length: 10 }, (_, i) => String(36 + i));
+// ملابس أطفال ("Kids clothing") — age ranges, not adult letter/number sizes.
+const KIDS_SIZES = [
+  "0-3 أشهر", "3-6 أشهر", "6-9 أشهر", "9-12 أشهر",
+  "1-2 سنة", "2-3 سنوات", "3-4 سنوات", "4-5 سنوات",
+  "5-6 سنوات", "6-7 سنوات", "7-8 سنوات", "8-9 سنوات",
+  "9-10 سنوات", "10-12 سنة", "12-14 سنة",
+];
 
 const CATEGORY_FEATURED_BRANDS: Record<string, string[]> = {
   "فساتين": ["Zara", "Sherri Hill", "Gizia", "Monsoon", "Mango", "H&M"],
@@ -32,7 +43,6 @@ const CATEGORY_FEATURED_BRANDS: Record<string, string[]> = {
   "إكسسوارات": ["Swarovski", "Pandora", "Michael Kors", "DKNY", "Rado", "Fossil"],
   "ملابس رجالية": ["Zara", "Ralph Lauren", "Tommy Hilfiger", "Lacoste", "Calvin Klein", "H&M"],
   "ملابس أطفال": ["Zara", "H&M", "Next", "Marks & Spencer", "Mothercare", "Carter's"],
-  "ملابس رياضية": ["Nike", "Adidas", "Puma", "Under Armour", "Reebok", "Champion"],
   "ملابس تقليدية": ["Gizia", "Zara", "Mango"],
   "أخرى": ["Zara", "H&M", "Mango", "Gizia", "Monsoon", "Michael Kors"],
 };
@@ -211,8 +221,23 @@ export default function SellForm() {
   }
 
   /* ── Category ────────────────────────────────────────────────────────── */
+  // عطور و تجميل gets its own field set below (volume instead of a size
+  // dropdown, sealed/opened/used instead of clothing condition, no
+  // color) — it isn't clothing, so none of the clothing-shaped fields
+  // apply.
+  const isBeauty = category === "عطور و تجميل";
   const isOneSize = category === "حقائب" || category === "إكسسوارات";
-  const sizeType = category === "أحذية" ? "numbers" : isOneSize ? "one-size" : "letters";
+  const isKids = category === "ملابس أطفال";
+  const sizeType = category === "أحذية"
+    ? "numbers"
+    : isBeauty
+      ? "volume"
+      : isOneSize
+        ? "one-size"
+        : isKids
+          ? "kids"
+          : "letters";
+  const conditionOptions = isBeauty ? BEAUTY_CONDITIONS : CONDITIONS;
 
   function handleCategoryChange(newCat: string) {
     setCategory(newCat);
@@ -222,6 +247,10 @@ export default function SellForm() {
     setBrandQuery("");
     setComboOpen(false);
     setHighlightIdx(-1);
+    // Cleared too — hidden entirely for عطور و تجميل, so a value picked
+    // under a previous category shouldn't silently ride along into a
+    // listing where the field isn't even shown any more.
+    setColor("");
     const autoOneSize = newCat === "حقائب" || newCat === "إكسسوارات";
     setSize(autoOneSize ? "مقاس واحد" : "");
   }
@@ -585,29 +614,44 @@ export default function SellForm() {
                   التفاصيل
                 </h3>
 
-                {/* Color */}
-                <div>
-                  <label htmlFor="color" className={fieldLabel}>اللون</label>
-                  <div className="relative">
-                    <select
-                      id="color" name="color"
-                      value={color} onChange={(e) => setColor(e.target.value)}
-                      dir="rtl"
-                      className={`${input} appearance-none cursor-pointer`}
-                    >
-                      <option value="">اختر اللون</option>
-                      {["أسود", "أبيض", "رمادي", "بيج", "بني", "أزرق", "أخضر", "أحمر", "وردي", "برتقالي", "أصفر", "بنفسجي", "ذهبي", "فضي", "متعدد الألوان"].map((c) => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                    <ChevronDown className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                {/* Color — عطور و تجميل has no color field at all (see isBeauty). */}
+                {!isBeauty && (
+                  <div>
+                    <label htmlFor="color" className={fieldLabel}>اللون</label>
+                    <div className="relative">
+                      <select
+                        id="color" name="color"
+                        value={color} onChange={(e) => setColor(e.target.value)}
+                        dir="rtl"
+                        className={`${input} appearance-none cursor-pointer`}
+                      >
+                        <option value="">اختر اللون</option>
+                        {["أسود", "أبيض", "رمادي", "بيج", "بني", "أزرق", "أخضر", "أحمر", "وردي", "برتقالي", "أصفر", "بنفسجي", "ذهبي", "فضي", "متعدد الألوان"].map((c) => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Size */}
                 <div>
-                  <p className={fieldLabel}>المقاس</p>
-                  {isOneSize ? (
+                  <p className={fieldLabel}>{isBeauty ? "الحجم" : "المقاس"}</p>
+                  {isBeauty ? (
+                    // Free-text instead of a fixed dropdown — perfume/beauty
+                    // sizes (50ml, 100g, ...) vary too much for a curated
+                    // list the way clothing/shoe sizes don't. Has its own
+                    // name="size_value" so it submits directly, same as the
+                    // dropdown below.
+                    <input
+                      type="text" name="size_value"
+                      value={size} onChange={(e) => setSize(e.target.value)}
+                      placeholder="مثال: 50 مل"
+                      dir="rtl" required
+                      className={input}
+                    />
+                  ) : isOneSize ? (
                     <div className={`${input} text-muted-foreground select-none cursor-default`}>
                       مقاس واحد
                     </div>
@@ -622,6 +666,8 @@ export default function SellForm() {
                         <option value="" disabled>اختر المقاس</option>
                         {category === "أحذية" ? (
                           SHOE_SIZES.map((s) => <option key={s} value={s}>{s}</option>)
+                        ) : isKids ? (
+                          KIDS_SIZES.map((s) => <option key={s} value={s}>{s}</option>)
                         ) : (
                           <>
                             <optgroup label="حروف">
@@ -642,7 +688,7 @@ export default function SellForm() {
                 <div>
                   <p className={fieldLabel}>الحالة</p>
                   <div className="grid grid-cols-2 gap-2">
-                    {CONDITIONS.map((c) => (
+                    {conditionOptions.map((c) => (
                       <button
                         key={c} type="button"
                         onClick={() => setCondition(c === condition ? "" : c)}

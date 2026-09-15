@@ -9,13 +9,17 @@ import { BRAND_LABEL } from "@/lib/brands";
 
 /* ── Static data ─────────────────────────────────────────────────────────── */
 
+// hrefs must match the exact `products.category` value stored in the DB
+// (see lib/categories.ts) — the search page filters with an exact match,
+// so a placeholder slug like "kids"/"traditional" here would silently
+// return zero results instead of erroring.
 const CATEGORIES = [
   { label: "فساتين",         href: "/search?category=فساتين",         image: "/category-dress.png"         },
   { label: "أحذية",          href: "/search?category=أحذية",          image: "/category-shoes.webp"        },
   { label: "حقائب",          href: "/search?category=حقائب",          image: "/category-bag.jpg"           },
   { label: "إكسسوارات",      href: "/search?category=إكسسوارات",      image: "/category-accessories.png"  },
-  { label: "أزياء تقليدية",  href: "/search?category=traditional",    image: "/category-traditional.jpg"  },
-  { label: "ملابس أطفال",    href: "/search?category=kids",           image: "/category-baby.png"         },
+  { label: "أزياء تقليدية",  href: "/search?category=ملابس تقليدية",  image: "/category-traditional.jpg"  },
+  { label: "ملابس أطفال",    href: "/search?category=ملابس أطفال",    image: "/category-baby.png"         },
 ];
 
 const BRANDS = [

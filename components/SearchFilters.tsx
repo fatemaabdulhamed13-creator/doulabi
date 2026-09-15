@@ -10,6 +10,13 @@ import { CATEGORIES } from "@/lib/categories";
 const LETTER_SIZES       = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "XXXL"];
 const CLOTHING_NUM_SIZES = Array.from({ length: 12 },  (_, i) => String(34 + i * 2));
 const SHOE_SIZES         = Array.from({ length: 10 }, (_, i) => String(36 + i));
+// ملابس أطفال ("Kids clothing") — age ranges, matches SellForm's KIDS_SIZES.
+const KIDS_SIZES = [
+  "0-3 أشهر", "3-6 أشهر", "6-9 أشهر", "9-12 أشهر",
+  "1-2 سنة", "2-3 سنوات", "3-4 سنوات", "4-5 سنوات",
+  "5-6 سنوات", "6-7 سنوات", "7-8 سنوات", "8-9 سنوات",
+  "9-10 سنوات", "10-12 سنة", "12-14 سنة",
+];
 
 const COLORS = [
   "أسود", "أبيض", "رمادي", "بيج", "بني",
@@ -49,11 +56,19 @@ export default function SearchFilters() {
   const [delivery, setDelivery] = useState(sp.get("delivery") === "true");
 
   const isOneSize = category === "حقائب" || category === "إكسسوارات";
+  // عطور و تجميل isn't clothing — no size/color filter for it (matches
+  // SellForm.tsx's isBeauty hiding the same fields on the listing side).
+  // Free-text sizes like "50 مل" wouldn't match a fixed dropdown anyway.
+  const isBeauty = category === "عطور و تجميل";
 
   function handleCategoryChange(newCat: string) {
     setCategory(newCat);
     const autoOneSize = newCat === "حقائب" || newCat === "إكسسوارات";
     setSize(autoOneSize ? "مقاس واحد" : "");
+    // Cleared too — hidden entirely for عطور و تجميل, so a stale value
+    // from a previous category shouldn't silently stay applied as a
+    // filter once the field isn't even shown any more.
+    setColor("");
   }
 
   const hasFilters = !!(q || category || size || minPrice || maxPrice || color || city || brand || delivery);
@@ -179,54 +194,51 @@ export default function SearchFilters() {
         </div>
       </div>
 
-      {/* Size */}
-      <div>
-        <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">المقاس</label>
+      {/* Size — hidden for عطور و تجميل, see isBeauty above. */}
+      {!isBeauty && (
+        <div>
+          <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">المقاس</label>
 
-        {isOneSize ? (
-          <div className={`${sel} text-muted-foreground cursor-default`}>مقاس واحد</div>
-        ) : (
+          {isOneSize ? (
+            <div className={`${sel} text-muted-foreground cursor-default`}>مقاس واحد</div>
+          ) : (
+            <div className="relative">
+              <select value={size} onChange={(e) => setSize(e.target.value)} dir="rtl" className={sel}>
+                <option value="">الكل</option>
+                {category === "أحذية" ? (
+                  SHOE_SIZES.map((s) => <option key={s} value={s}>{s}</option>)
+                ) : category === "ملابس أطفال" ? (
+                  KIDS_SIZES.map((s) => <option key={s} value={s}>{s}</option>)
+                ) : (
+                  <>
+                    <optgroup label="حروف">
+                      {LETTER_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </optgroup>
+                    <optgroup label="أرقام">
+                      {CLOTHING_NUM_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </optgroup>
+                  </>
+                )}
+              </select>
+              <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Color — hidden for عطور و تجميل, see isBeauty above. */}
+      {!isBeauty && (
+        <div>
+          <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">اللون</label>
           <div className="relative">
-            <select value={size} onChange={(e) => setSize(e.target.value)} dir="rtl" className={sel}>
+            <select value={color} onChange={(e) => setColor(e.target.value)} dir="rtl" className={sel}>
               <option value="">الكل</option>
-              {category === "أحذية" ? (
-                SHOE_SIZES.map((s) => <option key={s} value={s}>{s}</option>)
-              ) : category === "فساتين" ? (
-                <>
-                  <optgroup label="حروف">
-                    {LETTER_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </optgroup>
-                  <optgroup label="أرقام">
-                    {CLOTHING_NUM_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </optgroup>
-                </>
-              ) : (
-                <>
-                  <optgroup label="حروف">
-                    {LETTER_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </optgroup>
-                  <optgroup label="أرقام">
-                    {CLOTHING_NUM_SIZES.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </optgroup>
-                </>
-              )}
+              {COLORS.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
             <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
           </div>
-        )}
-      </div>
-
-      {/* Color */}
-      <div>
-        <label className="block text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">اللون</label>
-        <div className="relative">
-          <select value={color} onChange={(e) => setColor(e.target.value)} dir="rtl" className={sel}>
-            <option value="">الكل</option>
-            {COLORS.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <ChevronDown className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
         </div>
-      </div>
+      )}
 
       {/* Price range */}
       <div>

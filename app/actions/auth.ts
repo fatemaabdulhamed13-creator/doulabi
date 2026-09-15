@@ -9,14 +9,25 @@ export type AuthState     = { error: string } | null
 export type PasswordState = { error: string } | { success: true } | null
 export type DeleteState   = { error: string } | null
 
+// Libyan mobile numbers: 9 digits, always starting with 9 (91/92/94/95…).
+// This is the only validation the WhatsApp number gets now that the
+// client-side "test the wa.me link" gate is gone — enforced here too so a
+// direct POST can't bypass the signup form's own check.
+const WHATSAPP_LOCAL_PATTERN = /^9\d{8}$/
+
 export async function signUpAction(
   _prevState: AuthState,
   formData: FormData
 ): Promise<AuthState> {
-  const full_name       = String(formData.get('full_name')       ?? '')
-  const email           = String(formData.get('email')           ?? '')
-  const whatsapp_number = '+218' + String(formData.get('whatsapp_number') ?? '')
-  const password        = String(formData.get('password')        ?? '')
+  const full_name         = String(formData.get('full_name')       ?? '')
+  const email              = String(formData.get('email')           ?? '')
+  const whatsapp_local     = String(formData.get('whatsapp_number') ?? '').replace(/\D/g, '')
+  const password           = String(formData.get('password')        ?? '')
+
+  if (!WHATSAPP_LOCAL_PATTERN.test(whatsapp_local)) {
+    return { error: 'رقم الواتساب غير صحيح. أدخل 9 أرقام تبدأ بـ 9 (مثال: 91XXXXXXX).' }
+  }
+  const whatsapp_number = '+218' + whatsapp_local
 
   const supabase = await createClient()
 

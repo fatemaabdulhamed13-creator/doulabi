@@ -13,6 +13,9 @@ const CONDITIONS = [
   "مستعمل - حالة جيدة",
   "مستعمل - حالة مقبولة",
 ];
+// عطور و تجميل ("Perfumes & Beauty") isn't clothing — matches SellForm's
+// BEAUTY_CONDITIONS.
+const BEAUTY_CONDITIONS = ["جديد مغلق", "جديد مفتوح", "مستعمل"];
 
 const CITIES = [
   "طرابلس", "بنغازي", "مصراتة", "الزاوية", "البيضاء",
@@ -20,12 +23,21 @@ const CITIES = [
 ];
 
 const LETTER_SIZES       = ["XXS", "XS", "S", "M", "L", "XL", "XXL", "XXXL"];
-const CLOTHING_NUM_SIZES = Array.from({ length: 12 }, (_, i) => String(34 + i * 2));
 const SHOE_SIZES         = Array.from({ length: 10 }, (_, i) => String(36 + i));
+// ملابس أطفال ("Kids clothing") — age ranges, matches SellForm's KIDS_SIZES.
+const KIDS_SIZES = [
+  "0-3 أشهر", "3-6 أشهر", "6-9 أشهر", "9-12 أشهر",
+  "1-2 سنة", "2-3 سنوات", "3-4 سنوات", "4-5 سنوات",
+  "5-6 سنوات", "6-7 سنوات", "7-8 سنوات", "8-9 سنوات",
+  "9-10 سنوات", "10-12 سنة", "12-14 سنة",
+];
 
 function getSizeOptions(sizeType: string): string[] {
-  if (sizeType === "numbers") return CLOTHING_NUM_SIZES;
-  if (sizeType === "shoes")   return SHOE_SIZES;
+  // SellForm only ever stores "numbers" for أحذية (shoes) — the numeric
+  // clothing sizes (34-56) live inside the combined "letters" dropdown
+  // instead, so "numbers" here always means shoes.
+  if (sizeType === "numbers")  return SHOE_SIZES;
+  if (sizeType === "kids")     return KIDS_SIZES;
   if (sizeType === "one-size") return ["مقاس واحد"];
   return LETTER_SIZES; // "letters" default
 }
@@ -51,6 +63,7 @@ type ProductSnapshot = {
   id:                 string;
   title:              string;
   price:              number;
+  category:           string;
   brand:              string;
   condition:          string;
   description:        string | null;
@@ -71,6 +84,12 @@ export default function EditListingForm({ product }: { product: ProductSnapshot 
     boundAction,
     null,
   );
+
+  // عطور و تجميل has its own field set at creation (SellForm) — mirrored
+  // here so editing one doesn't show a clothing size dropdown / condition
+  // set that doesn't apply to it.
+  const isBeauty = product.category === "عطور و تجميل";
+  const conditionOptions = isBeauty ? BEAUTY_CONDITIONS : CONDITIONS;
 
   return (
     <div dir="rtl" className="min-h-screen bg-background">
@@ -121,25 +140,40 @@ export default function EditListingForm({ product }: { product: ProductSnapshot 
 
           {/* ── Size ──────────────────────────────────────────────── */}
           <div>
-            <label htmlFor="edit-size" className={labelCls}>المقاس</label>
-            <select
-              id="edit-size"
-              name="size_value"
-              defaultValue={product.size_value}
-              required
-              className={inputCls}
-            >
-              {getSizeOptions(product.size_type).map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
+            <label htmlFor="edit-size" className={labelCls}>{isBeauty ? "الحجم" : "المقاس"}</label>
+            {isBeauty ? (
+              // Free-text, matching SellForm — perfume/beauty sizes
+              // (50ml, 100g, ...) vary too much for a fixed list the way
+              // clothing/shoe sizes don't.
+              <input
+                id="edit-size"
+                name="size_value"
+                type="text"
+                defaultValue={product.size_value}
+                required
+                className={inputCls}
+                placeholder="مثال: 50 مل"
+              />
+            ) : (
+              <select
+                id="edit-size"
+                name="size_value"
+                defaultValue={product.size_value}
+                required
+                className={inputCls}
+              >
+                {getSizeOptions(product.size_type).map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            )}
           </div>
 
           {/* ── Condition ──────────────────────────────────────────────── */}
           <div>
             <label className={labelCls}>حالة المنتج</label>
             <div className="grid grid-cols-2 gap-2">
-              {CONDITIONS.map((c) => (
+              {conditionOptions.map((c) => (
                 <label key={c} className={toggleBtn(c === product.condition)}>
                   <input
                     type="radio"

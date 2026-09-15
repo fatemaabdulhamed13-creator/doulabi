@@ -1,14 +1,9 @@
 /**
  * Sub-category map — keyed by the exact `category` value used in the DB / URL params.
  *
- * Dual keys for traditional wear:
- *   - "ملابس تقليدية"  — value stored in DB (set by SellForm)
- *   - "traditional"    — URL param sent by the homepage category link
- * Both point to the same list so pills appear on the search page regardless
- * of which key the category arrives under.
- *
- * أحذية / حقائب / إكسسوارات use the same Arabic string in the SellForm,
- * the DB, and the homepage URL params — so one key covers all three contexts.
+ * Every key here matches the canonical category string in lib/categories.ts
+ * exactly — the homepage category links, SellForm, and the DB all use the
+ * same Arabic string, so one key covers all three contexts.
  */
 export const SUB_CATEGORIES: Record<string, string[]> = {
   فساتين: [
@@ -48,23 +43,15 @@ export const SUB_CATEGORIES: Record<string, string[]> = {
     "قبعات",
   ],
 
-  // SellForm stores this Arabic string as the category value
+  // SellForm stores this Arabic string as the category value. عبايات is
+  // its own top-level category now (see lib/categories.ts) — no longer
+  // listed here too, which would make it ambiguous which top-level
+  // category an abaya listing belongs under.
   "ملابس تقليدية": [
     "بدلة كبيرة",
     "بدلة صغيرة",
     "بودري",
     "رداء",
     "تكشيطة",
-    "عبايات",
-  ],
-
-  // Homepage links to ?category=traditional — same list, different key
-  traditional: [
-    "بدلة كبيرة",
-    "بدلة صغيرة",
-    "بودري",
-    "رداء",
-    "تكشيطة",
-    "عبايات",
   ],
 }
