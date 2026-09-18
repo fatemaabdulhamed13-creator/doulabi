@@ -1,9 +1,17 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, ArrowRight, AlertCircle } from "lucide-react";
-import { updateProductAction, type UpdateListingState } from "@/app/actions/product";
+import { Loader2, ArrowRight, AlertCircle, Info } from "lucide-react";
+import {
+  updateProductAction,
+  deleteProductAction,
+  type UpdateListingState,
+} from "@/app/actions/product";
+import { CATEGORIES } from "@/lib/categories";
+import { BRANDS } from "@/lib/brands";
+
+const BRAND_LABELS = BRANDS.map((b) => b.label).sort((a, b) => a.localeCompare(b, "ar"));
 
 /* ── Editable fields config ──────────────────────────────────────────────── */
 
@@ -66,6 +74,7 @@ type ProductSnapshot = {
   category:           string;
   brand:              string;
   condition:          string;
+  status:             string;
   description:        string | null;
   city:               string | null;
   is_open_to_offers:  boolean;
@@ -85,11 +94,51 @@ export default function EditListingForm({ product }: { product: ProductSnapshot 
     null,
   );
 
+  const [title, setTitle] = useState(product.title);
+  const [category, setCategory] = useState(product.category);
+  const [brand, setBrand] = useState(product.brand);
+  const [brandQuery, setBrandQuery] = useState("");
+
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
   // عطور و تجميل has its own field set at creation (SellForm) — mirrored
   // here so editing one doesn't show a clothing size dropdown / condition
-  // set that doesn't apply to it.
-  const isBeauty = product.category === "عطور و تجميل";
+  // set that doesn't apply to it. Driven by the local `category` state
+  // (not product.category) so switching category live-updates this
+  // before saving, same as SellForm.
+  const isBeauty = category === "عطور و تجميل";
   const conditionOptions = isBeauty ? BEAUTY_CONDITIONS : CONDITIONS;
+  const isApproved = product.status === "approved";
+
+  const filteredBrands = brandQuery.trim()
+    ? BRAND_LABELS.filter((b) => b.toLowerCase().includes(brandQuery.trim().toLowerCase()))
+    : BRAND_LABELS;
+
+  // Condition's radio inputs are uncontrolled (defaultChecked against the
+  // original product.condition, see below) — crossing the beauty/
+  // non-beauty boundary swaps in a completely different option set whose
+  // labels don't overlap with the original, so nothing ends up checked
+  // and the seller has to explicitly re-pick one, which is exactly the
+  // safe behavior wanted here without needing to lift condition into
+  // controlled state too. Brand/size are left untouched on category
+  // change, unlike SellForm's from-scratch flow — clearing fields the
+  // seller didn't touch would be surprising in an edit context.
+
+  async function handleDelete() {
+    if (!window.confirm("هل أنتِ متأكدة؟ سيتم حذف هذا الإعلان نهائيًا ولا يمكن التراجع عن ذلك.")) {
+      return;
+    }
+    setDeleteError(null);
+    setDeleting(true);
+    const result = await deleteProductAction(product.id);
+    if (result?.error) {
+      setDeleting(false);
+      setDeleteError(result.error);
+      return;
+    }
+    router.push("/profile");
+  }
 
   return (
     <div dir="rtl" className="min-h-screen bg-background">
@@ -119,6 +168,104 @@ export default function EditListingForm({ product }: { product: ProductSnapshot 
               <p className="text-sm font-medium text-red-700">{state.error}</p>
             </div>
           )}
+          {deleteError && (
+            <div className="flex items-start gap-3 p-4 rounded-2xl bg-red-50 border border-red-200">
+              <AlertCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+              <p className="text-sm font-medium text-red-700">{deleteError}</p>
+            </div>
+          )}
+
+          {isApproved && (
+            <div className="flex items-start gap-3 p-4 rounded-2xl bg-muted border border-border">
+              <Info className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+              <p className="text-sm text-foreground leading-relaxed">
+                تعديل العنوان، الفئة، الماركة، الحالة، أو الوصف سيرسل هذا الإعلان للمراجعة من
+                جديد وسيتم إخفاؤه مؤقتًا حتى تتم الموافقة عليه. باقي الحقول لا تؤثر على ذلك.
+              </p>
+            </div>
+          )}
+          {product.status === "rejected" && (
+            <div className="flex items-start gap-3 p-4 rounded-2xl bg-muted border border-border">
+              <Info className="h-5 w-5 text-primary shrink-0 mt-0.5" />
+              <p className="text-sm text-foreground leading-relaxed">
+                تم رفض هذا الإعلان سابقًا. حفظ أي تعديل هنا سيعيد إرساله للمراجعة من جديد.
+              </p>
+            </div>
+          )}
+
+          {/* ── Title ──────────────────────────────────────────────────── */}
+          <div>
+            <label htmlFor="edit-title" className={labelCls}>عنوان الإعلان</label>
+            <input
+              id="edit-title"
+              name="title"
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              minLength={3}
+              maxLength={120}
+              className={inputCls}
+              placeholder="مثال: فستان سهرة أزرق"
+            />
+          </div>
+
+          {/* ── Category ───────────────────────────────────────────────── */}
+          <div>
+            <label className={labelCls}>الفئة</label>
+            <div className="grid grid-cols-2 gap-2">
+              {CATEGORIES.map((c) => (
+                <label key={c} className={toggleBtn(c === category)}>
+                  <input
+                    type="radio"
+                    name="category"
+                    value={c}
+                    checked={c === category}
+                    onChange={() => setCategory(c)}
+                    className="sr-only"
+                    required
+                  />
+                  {c}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Brand ──────────────────────────────────────────────────── */}
+          <div className="relative">
+            <label htmlFor="edit-brand" className={labelCls}>الماركة</label>
+            <input
+              id="edit-brand"
+              name="brand"
+              type="text"
+              value={brand}
+              onChange={(e) => {
+                setBrand(e.target.value);
+                setBrandQuery(e.target.value);
+              }}
+              required
+              className={inputCls}
+              placeholder="ابحث عن الماركة أو اكتبها"
+              autoComplete="off"
+            />
+            {brandQuery.trim().length > 0 && filteredBrands.length > 0 && (
+              <div className="absolute z-10 mt-1 w-full rounded-xl border border-border bg-card shadow-lg overflow-hidden">
+                {filteredBrands.slice(0, 6).map((b) => (
+                  <button
+                    key={b}
+                    type="button"
+                    onClick={() => {
+                      setBrand(b);
+                      setBrandQuery("");
+                    }}
+                    className="w-full text-right px-4 py-2.5 text-sm text-foreground hover:bg-muted transition-colors border-b border-border last:border-b-0"
+                  >
+                    {b}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* ── Price ──────────────────────────────────────────────────── */}
           <div>
@@ -259,13 +406,13 @@ export default function EditListingForm({ product }: { product: ProductSnapshot 
 
           {/* ── Read-only info note ──────────────────────────────────── */}
           <p className="text-xs text-muted-foreground bg-muted/50 rounded-xl px-4 py-3 leading-relaxed">
-            ملاحظة: لا يمكن تعديل الصور أو الفئة أو الماركة بعد النشر. تواصل مع الدعم إذا احتجت لذلك.
+            ملاحظة: لا يمكن تعديل الصور من هنا حاليًا. تواصل مع الدعم إذا احتجت لذلك.
           </p>
 
           {/* ── Submit ─────────────────────────────────────────────────── */}
           <button
             type="submit"
-            disabled={pending}
+            disabled={pending || deleting}
             className="
               w-full py-4 rounded-2xl
               bg-primary text-white font-bold text-[15px]
@@ -277,6 +424,24 @@ export default function EditListingForm({ product }: { product: ProductSnapshot 
           >
             {pending && <Loader2 className="h-5 w-5 animate-spin shrink-0" />}
             {pending ? "جاري الحفظ..." : "حفظ التغييرات"}
+          </button>
+
+          {/* ── Delete / withdraw ──────────────────────────────────────── */}
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={pending || deleting}
+            className="
+              w-full py-4 rounded-2xl
+              bg-card text-red-600 font-bold text-[15px] border border-red-200
+              hover:bg-red-50 active:scale-[0.98]
+              disabled:opacity-60 disabled:cursor-not-allowed
+              transition-all
+              flex items-center justify-center gap-2
+            "
+          >
+            {deleting && <Loader2 className="h-5 w-5 animate-spin shrink-0" />}
+            {deleting ? "جاري الحذف..." : "حذف الإعلان نهائيًا"}
           </button>
 
         </div>

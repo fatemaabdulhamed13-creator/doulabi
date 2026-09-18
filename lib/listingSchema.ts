@@ -54,7 +54,7 @@ export const imageFileSchema = z
 
 // ── Core listing fields ──────────────────────────────────────────────────────
 
-const coreListingFields = z.object({
+export const coreListingFields = z.object({
   title:             z.string().min(3,  'عنوان الإعلان قصير جداً.').max(120, 'عنوان الإعلان طويل جداً.').trim(),
   price:             z.coerce.number().min(0, 'يجب أن يكون السعر 0 أو أكثر.'),
   category:          z.string().min(1, 'الرجاء اختيار الفئة.').trim(),

@@ -19,8 +19,8 @@ export default async function EditListingPage({ params }: Props) {
 
   if (!product) notFound();
   if (product.seller_id !== user.id) redirect(`/product/${id}`);
-  // Drafts and pending items can also be edited
-  if (product.status === "rejected") redirect(`/product/${id}`);
+  // Every status is editable now — a rejected listing is resubmitted for
+  // review by editing and saving it, same as a pending one.
 
   return <EditListingForm product={product} />;
 }

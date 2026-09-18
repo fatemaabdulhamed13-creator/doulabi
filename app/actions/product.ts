@@ -10,7 +10,9 @@ import { r2, R2_BUCKET, r2PublicUrl } from '@/lib/r2'
 import {
   publishListingSchema,
   draftListingSchema,
+  coreListingFields,
 } from '@/lib/listingSchema'
+import { deleteProductForUser } from '@/lib/products/deleteProduct'
 
 export type ListingState = { error: string } | null
 
@@ -277,7 +279,22 @@ export async function updateProductAction(
       return { error: 'غير مصرح لك بتعديل هذا الإعلان.' }
     }
 
-    // Parse editable fields
+    // Parse editable fields. title/category/brand are editable at any
+    // status now — the enforce_product_edit_rules DB trigger is what
+    // actually pulls an approved listing back to "pending" if one of
+    // these changes, not a block here.
+    const identityFields = coreListingFields
+      .pick({ title: true, category: true, brand: true })
+      .safeParse({
+        title:    formData.get('title'),
+        category: formData.get('category'),
+        brand:    formData.get('brand'),
+      })
+    if (!identityFields.success) {
+      return { error: identityFields.error.issues[0]?.message ?? 'بيانات غير صالحة.' }
+    }
+    const { title, category, brand } = identityFields.data
+
     const price       = Number(formData.get('price'))
     const condition   = String(formData.get('condition') ?? '').trim()
     const size_value  = String(formData.get('size_value') ?? '').trim()
@@ -292,7 +309,10 @@ export async function updateProductAction(
 
     const { error: updateError } = await supabase
       .from('products')
-      .update({ price, condition, size_value, description, city, is_open_to_offers, delivery_available })
+      .update({
+        title, category, brand,
+        price, condition, size_value, description, city, is_open_to_offers, delivery_available,
+      })
       .eq('id', productId)
       .eq('seller_id', user.id)
 
@@ -308,6 +328,32 @@ export async function updateProductAction(
   }
 
   redirect(`/product/${productId}`)
+}
+
+export type DeleteListingState = { error: string } | null
+
+/** Sellers can withdraw a listing at any status — this is a real, permanent
+ *  delete (not a soft "withdrawn" status), since accidental/unwanted
+ *  listings should actually be gone, not linger around. */
+export async function deleteProductAction(productId: string): Promise<DeleteListingState> {
+  try {
+    const supabase = await createClient()
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) return { error: 'يجب تسجيل الدخول أولاً.' }
+
+    const result = await deleteProductForUser(supabase, productId, user.id)
+    if ('error' in result) return result
+
+    revalidateTag('products', 'default')
+    revalidatePath('/profile')
+    revalidatePath('/')
+    revalidatePath('/search')
+  } catch (err) {
+    return { error: `حدث خطأ غير متوقع: ${err instanceof Error ? err.message : String(err)}` }
+  }
+
+  return null
 }
 
 /* ── Admin helpers ───────────────────────────────────────────────────────── */
