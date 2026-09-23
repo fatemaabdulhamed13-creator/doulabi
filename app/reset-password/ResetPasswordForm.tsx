@@ -76,9 +76,19 @@ export default function ResetPasswordForm() {
    * The hash fragment is never sent to the server, so it can only be read
    * client-side. `createBrowserClient` auto-detects it on init and fires a
    * `PASSWORD_RECOVERY` auth event once the session is set — we just listen
-   * for that. For the PKCE case we exchange the code ourselves. A short poll
-   * covers the (rare) case where the auto-detect listener attaches slightly
-   * after supabase-js has already consumed the hash.
+   * for that. For the PKCE case we exchange the code ourselves.
+   *
+   * Security-critical: this must only ever resolve "ready" for an actual
+   * recovery link, never for "any session happens to exist" — this page
+   * used to also accept a plain SIGNED_IN event and any pre-existing
+   * getSession() result, which meant anyone already signed in on a shared/
+   * public browser could just type this URL and land straight on a working
+   * "set new password" form with no re-authentication. So: no `code` param
+   * and no `type=recovery` in the hash now means an immediate "invalid" —
+   * the poll below (which only exists to cover the rare race where
+   * supabase-js parses the hash into a session slightly after this
+   * listener attaches) only ever runs once the hash has already proven
+   * this is a genuine recovery link.
    */
   useEffect(() => {
     const supabase = createClient();
@@ -90,10 +100,8 @@ export default function ResetPasswordForm() {
       setVerifyStatus(ok ? "ready" : "invalid");
     };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && session)) {
-        finish(true);
-      }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") finish(true);
     });
 
     (async () => {
@@ -102,6 +110,12 @@ export default function ResetPasswordForm() {
       if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
         finish(!error);
+        return;
+      }
+
+      const hash = typeof window !== "undefined" ? window.location.hash : "";
+      if (!hash.includes("type=recovery")) {
+        finish(false);
         return;
       }
 

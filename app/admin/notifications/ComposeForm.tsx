@@ -17,6 +17,14 @@ const PLATFORM_OPTIONS: { value: TargetPlatform; label: string }[] = [
   { value: 'android', label: 'Android فقط' },
 ]
 
+type LinkType = 'none' | 'listing' | 'collection'
+
+const LINK_TYPE_OPTIONS: { value: LinkType; label: string }[] = [
+  { value: 'none', label: 'بدون رابط' },
+  { value: 'listing', label: 'منتج' },
+  { value: 'collection', label: 'تشكيلة' },
+]
+
 const INPUT_CLS = `
   w-full rounded-xl border border-border bg-background
   px-4 py-2.5 text-sm text-foreground
@@ -28,7 +36,9 @@ export function ComposeForm({ iosCount, androidCount }: { iosCount: number; andr
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [targetPlatform, setTargetPlatform] = useState<TargetPlatform>('all')
+  const [linkType, setLinkType] = useState<LinkType>('none')
   const [listingId, setListingId] = useState('')
+  const [collectionSlug, setCollectionSlug] = useState('')
   const [testUserId, setTestUserId] = useState('')
   const [showConfirm, setShowConfirm] = useState(false)
 
@@ -45,7 +55,9 @@ export function ComposeForm({ iosCount, androidCount }: { iosCount: number; andr
   function resetComposer() {
     setTitle('')
     setBody('')
+    setLinkType('none')
     setListingId('')
+    setCollectionSlug('')
   }
 
   function handleConfirmSend() {
@@ -54,7 +66,8 @@ export function ComposeForm({ iosCount, androidCount }: { iosCount: number; andr
         title,
         body,
         targetPlatform,
-        listingId: listingId || undefined,
+        listingId: linkType === 'listing' ? listingId || undefined : undefined,
+        collectionSlug: linkType === 'collection' ? collectionSlug || undefined : undefined,
       })
       setShowConfirm(false)
       if (res.error) {
@@ -125,14 +138,42 @@ export function ComposeForm({ iosCount, androidCount }: { iosCount: number; andr
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-bold text-muted-foreground">معرّف المنتج للانتقال إليه (اختياري)</label>
-            <input
-              value={listingId}
-              onChange={(e) => setListingId(e.target.value)}
-              placeholder="product id — يفتح صفحة المنتج عند الضغط على الإشعار"
-              className={INPUT_CLS}
-              disabled={isSending}
-            />
+            <label className="text-xs font-bold text-muted-foreground">رابط الإشعار (اختياري)</label>
+            <div className="flex gap-2">
+              {LINK_TYPE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setLinkType(opt.value)}
+                  disabled={isSending}
+                  className={`
+                    flex-1 rounded-xl py-2 text-sm font-bold transition-colors
+                    disabled:opacity-50
+                    ${linkType === opt.value ? 'bg-primary text-white' : 'bg-muted text-muted-foreground hover:bg-muted/70'}
+                  `}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {linkType === 'listing' && (
+              <input
+                value={listingId}
+                onChange={(e) => setListingId(e.target.value)}
+                placeholder="product id — يفتح صفحة المنتج عند الضغط على الإشعار"
+                className={INPUT_CLS}
+                disabled={isSending}
+              />
+            )}
+            {linkType === 'collection' && (
+              <input
+                value={collectionSlug}
+                onChange={(e) => setCollectionSlug(e.target.value)}
+                placeholder="collection slug — مثال: fall-lookbook-2026"
+                className={INPUT_CLS}
+                disabled={isSending}
+              />
+            )}
           </div>
 
           <div className="flex flex-col gap-1.5">

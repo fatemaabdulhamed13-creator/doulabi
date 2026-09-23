@@ -13,6 +13,7 @@ import {
   coreListingFields,
 } from '@/lib/listingSchema'
 import { deleteProductForUser } from '@/lib/products/deleteProduct'
+import { notifySellerListingApproved } from '@/app/actions/notifications'
 
 export type ListingState = { error: string } | null
 
@@ -378,10 +379,12 @@ export async function requireAdmin() {
 export async function approveProductAction(productId: string, _?: FormData) {
   const supabase = await requireAdmin()
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('products')
     .update({ status: 'approved' })
     .eq('id', productId)
+    .select('seller_id, title')
+    .single()
 
   if (error) throw new Error(error.message)
 
@@ -389,6 +392,12 @@ export async function approveProductAction(productId: string, _?: FormData) {
   revalidatePath('/admin')
   revalidatePath('/')
   revalidatePath('/search')
+
+  await notifySellerListingApproved(supabase, {
+    sellerId: data.seller_id,
+    productId,
+    title: data.title,
+  })
 }
 
 export async function approveProductWithImagesAction(
@@ -399,10 +408,12 @@ export async function approveProductWithImagesAction(
 ) {
   const supabase = await requireAdmin()
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('products')
     .update({ status: 'approved', image_urls: imageUrls, category, brand })
     .eq('id', productId)
+    .select('seller_id, title')
+    .single()
 
   if (error) throw new Error(error.message)
 
@@ -410,6 +421,12 @@ export async function approveProductWithImagesAction(
   revalidatePath('/admin')
   revalidatePath('/')
   revalidatePath('/search')
+
+  await notifySellerListingApproved(supabase, {
+    sellerId: data.seller_id,
+    productId,
+    title: data.title,
+  })
 }
 
 export async function rejectProductAction(productId: string, _?: FormData) {
