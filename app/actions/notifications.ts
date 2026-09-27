@@ -193,10 +193,11 @@ export async function notifySellerListingApproved(
   supabase: Awaited<ReturnType<typeof requireAdmin>>,
   params: { sellerId: string; productId: string; title: string },
 ): Promise<void> {
-  const title = 'تمت الموافقة على إعلانك'
+  const title = 'تم نشر إعلانك بنجاح! 🎊'
+  const body = `«${params.title}» معروضة الآن للمشترين في دولابي`
   const data = { screen: 'listing', listingId: params.productId }
 
-  await writeInboxRows(supabase, [params.sellerId], { title, body: params.title, data })
+  await writeInboxRows(supabase, [params.sellerId], { title, body, data })
 
   try {
     const { data: tokens, error } = await supabase
@@ -210,7 +211,7 @@ export async function notifySellerListingApproved(
 
     await dispatchAndTally(supabase, tokens, {
       title,
-      body: params.title,
+      body,
       data,
       sound: 'default',
       priority: 'high',
