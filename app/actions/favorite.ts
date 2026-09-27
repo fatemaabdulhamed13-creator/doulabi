@@ -29,8 +29,6 @@ export async function toggleFavoriteAction(productId: string, _?: FormData) {
       .insert({ user_id: user.id, product_id: productId })
   }
 
+  // Favorite state is per-user and hydrated client-side; shared page caches don't depend on it.
   revalidatePath('/favorites')
-  revalidatePath(`/product/${productId}`)
-  revalidatePath('/')
-  revalidatePath('/search')
 }

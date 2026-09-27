@@ -2,8 +2,13 @@ import React from "react";
 import Link from "next/link";
 import { ChevronLeft, Pencil, Ruler, Sparkles, Tag, Layers, Truck, Palette, MapPin } from "lucide-react";
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
+import { unstable_cache } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
+import { hasSupabaseAuthCookie } from "@/lib/supabase/authCookie";
 import ProductImagePanel from "@/components/product-image-panel";
+import { FavoritesProvider } from "@/components/FavoritesProvider";
 import { BRAND_LABEL } from "@/lib/brands";
 
 type Props = {
@@ -28,9 +33,53 @@ type Product = {
   delivery_available: boolean;
   profiles: {
     full_name:        string;
-    whatsapp_number:  string;
   } | null;
 };
+
+// Shared across every visitor to this listing; busted by revalidateTag('products')
+// in the product actions and revalidateTag('profiles') when a seller renames.
+const getProduct = unstable_cache(
+  async (id: string) => {
+    const { data } = await createPublicClient()
+      .from("products")
+      .select(`
+        id, seller_id, title, price, brand, size_type, size_value,
+        condition, category, description, image_urls, is_open_to_offers,
+        color, city, delivery_available,
+        profiles ( full_name )
+      `)
+      .eq("id", id)
+      .eq("status", "approved")
+      .maybeSingle<Product>();
+    return data;
+  },
+  ["product-detail"],
+  { tags: ["products", "profiles"], revalidate: 300 },
+);
+
+async function getViewer() {
+  const cookieStore = await cookies();
+  if (!hasSupabaseAuthCookie(cookieStore.getAll().map((c) => c.name))) return null;
+  // Middleware already refreshed the session; getClaims() verifies the JWT
+  // locally instead of making a second Auth API round-trip.
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getClaims();
+  const id = data?.claims.sub;
+  return id ? { id, supabase } : null;
+}
+
+// Phone numbers are only readable by logged-in users (anon has no column grant).
+async function getSellerWhatsapp(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  sellerId: string,
+): Promise<string | null> {
+  const { data } = await supabase
+    .from("profiles")
+    .select("whatsapp_number")
+    .eq("id", sellerId)
+    .maybeSingle();
+  return data?.whatsapp_number ?? null;
+}
 
 /* ── WhatsApp CTA ────────────────────────────────────────────────────────── */
 
@@ -61,44 +110,21 @@ function WhatsAppCTA({ href }: { href: string }) {
 
 export default async function ProductPage({ params }: Props) {
   const { id } = await params;
-  const supabase = await createClient();
-
-  const { data: product } = await supabase
-    .from("products")
-    .select(`
-      id, seller_id, title, price, brand, size_type, size_value,
-      condition, category, description, image_urls, is_open_to_offers,
-      color, city, delivery_available,
-      profiles ( full_name, whatsapp_number )
-    `)
-    .eq("id", id)
-    .eq("status", "approved")
-    .single<Product>();
+  const [product, viewer] = await Promise.all([getProduct(id), getViewer()]);
 
   if (!product) notFound();
 
-  const { data: { user } } = await supabase.auth.getUser();
-  let initialIsFavorited = false;
-  if (user) {
-    const { data: fav } = await supabase
-      .from("favorites")
-      .select("product_id")
-      .eq("user_id", user.id)
-      .eq("product_id", product.id)
-      .maybeSingle();
-    initialIsFavorited = !!fav;
-  }
-
   const seller         = product.profiles;
   const sellerInitial  = seller?.full_name.charAt(0) ?? "؟";
-  const isOwner        = !!user && user.id === product.seller_id;
-  const whatsappHref   = seller?.whatsapp_number
-    ? user
-      ? `https://wa.me/${seller.whatsapp_number.replace(/\D/g, "")}?text=${encodeURIComponent(
+  const isOwner        = viewer?.id === product.seller_id;
+  const whatsapp       = viewer ? await getSellerWhatsapp(viewer.supabase, product.seller_id) : null;
+  const whatsappHref   = !viewer
+    ? `/signup?redirect=/product/${id}`
+    : whatsapp
+      ? `https://wa.me/${whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(
           `مرحباً، أنا مهتم بشراء: ${product.title}`
         )}`
-      : `/signup?redirect=/product/${id}`
-    : null;
+      : null;
 
   return (
     <div dir="rtl" className="min-h-screen bg-background">
@@ -110,12 +136,13 @@ export default async function ProductPage({ params }: Props) {
 
         {/* ── Left column: image ──────────────────────────────────── */}
         <div>
-          <ProductImagePanel
-            imageUrls={product.image_urls}
-            title={product.title}
-            productId={product.id}
-            initialIsFavorited={initialIsFavorited}
-          />
+          <FavoritesProvider>
+            <ProductImagePanel
+              imageUrls={product.image_urls}
+              title={product.title}
+              productId={product.id}
+            />
+          </FavoritesProvider>
         </div>
 
         {/* ── Right column: details ───────────────────────────────── */}

@@ -2,7 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ShoppingBag } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { unstable_cache } from "next/cache";
+import { createPublicClient } from "@/lib/supabase/public";
 import { BRAND_LABEL } from "@/lib/brands";
 
 type Props = {
@@ -18,29 +19,32 @@ type Listing = {
   image_urls: string[];
 };
 
+const getSellerPage = unstable_cache(
+  async (id: string) => {
+    const client = createPublicClient();
+    const [{ data: profile }, { data: listings }] = await Promise.all([
+      client.from("profiles").select("full_name").eq("id", id).maybeSingle(),
+      client
+        .from("products")
+        .select("id, title, price, brand, size_value, image_urls")
+        .eq("seller_id", id)
+        .eq("status", "approved")
+        .eq("is_sold", false)
+        .order("created_at", { ascending: false })
+        .limit(24)
+        .returns<Listing[]>(),
+    ]);
+    return { profile, listings: listings ?? [] };
+  },
+  ["seller-page"],
+  { tags: ["products", "profiles"], revalidate: 300 },
+);
+
 export default async function PublicProfilePage({ params }: Props) {
   const { id } = await params;
-  const supabase = await createClient();
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name")
-    .eq("id", id)
-    .maybeSingle();
+  const { profile, listings } = await getSellerPage(id);
 
   if (!profile) notFound();
-
-  const { data } = await supabase
-    .from("products")
-    .select("id, title, price, brand, size_value, image_urls")
-    .eq("seller_id", id)
-    .eq("status", "approved")
-    .eq("is_sold", false)
-    .order("created_at", { ascending: false })
-    .limit(24)
-    .returns<Listing[]>();
-
-  const listings = data ?? [];
   const initial  = profile.full_name.charAt(0);
 
   return (

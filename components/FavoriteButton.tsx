@@ -7,14 +7,13 @@ import { useFavorites } from "@/components/FavoritesProvider";
 
 type Props = {
   productId: string;
-  /** Still accepted so existing call-sites don't break, but ignored in favour
-   *  of the client-side FavoritesProvider context. */
+  /** Used until a FavoritesProvider has loaded, or when there is none (e.g. /favorites). */
   initialIsFavorited?: boolean;
 };
 
-export default function FavoriteButton({ productId }: Props) {
-  const { favIds } = useFavorites();
-  const serverValue = favIds.has(productId);
+export default function FavoriteButton({ productId, initialIsFavorited = false }: Props) {
+  const { favIds, loaded, setFavorited } = useFavorites();
+  const serverValue = loaded ? favIds.has(productId) : initialIsFavorited;
 
   const [isFav, setOptimisticFav] = useOptimistic(
     serverValue,
@@ -25,9 +24,11 @@ export default function FavoriteButton({ productId }: Props) {
   function handleClick(e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
+    const next = !isFav;
     startTransition(async () => {
-      setOptimisticFav(!isFav);
+      setOptimisticFav(next);
       await toggleFavoriteAction(productId);
+      setFavorited(productId, next);
     });
   }
 

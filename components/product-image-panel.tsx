@@ -10,10 +10,9 @@ type Props = {
   imageUrls:          string[];
   title:              string;
   productId:          string;
-  initialIsFavorited: boolean;
 };
 
-export default function ProductImagePanel({ imageUrls, title, productId, initialIsFavorited }: Props) {
+export default function ProductImagePanel({ imageUrls, title, productId }: Props) {
   const router = useRouter();
   const [activeIdx, setActiveIdx] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -87,7 +86,7 @@ export default function ProductImagePanel({ imageUrls, title, productId, initial
 
           {/* Favourite — top left (RTL end) */}
           <div className="absolute top-4 left-4 z-10">
-            <FavoriteButton productId={productId} initialIsFavorited={initialIsFavorited} />
+            <FavoriteButton productId={productId} />
           </div>
 
           {/* Prev / Next — only when multiple images */}
