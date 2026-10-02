@@ -14,16 +14,17 @@ export default async function EditProfilePage() {
 
   if (authError || !user) redirect("/login");
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name, whatsapp_number, city, bio")
-    .eq("id", user.id)
-    .single();
+  // Your own number comes from get_my_whatsapp() — the column isn't
+  // directly readable (20261001 migrations).
+  const [{ data: profile }, { data: ownWhatsapp }] = await Promise.all([
+    supabase.from("profiles").select("full_name, city, bio").eq("id", user.id).single(),
+    supabase.rpc("get_my_whatsapp"),
+  ]);
 
   return (
     <EditProfileForm
       initialName={profile?.full_name       ?? ""}
-      initialWhatsapp={profile?.whatsapp_number ?? ""}
+      initialWhatsapp={typeof ownWhatsapp === "string" ? ownWhatsapp : ""}
       initialCity={profile?.city            ?? ""}
       initialBio={profile?.bio              ?? ""}
     />

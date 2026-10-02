@@ -24,6 +24,8 @@ export async function signUpAction(
   const whatsapp_local     = String(formData.get('whatsapp_number') ?? '').replace(/\D/g, '')
   const password           = String(formData.get('password')        ?? '')
 
+  // Same minimum as Supabase Auth's setting and the mobile app.
+  if (password.length < 8) return { error: 'يجب أن تكون كلمة المرور 8 أحرف على الأقل.' }
   if (!WHATSAPP_LOCAL_PATTERN.test(whatsapp_local)) {
     return { error: 'رقم الواتساب غير صحيح. أدخل 9 أرقام تبدأ بـ 9 (مثال: 91XXXXXXX).' }
   }

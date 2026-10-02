@@ -1,11 +1,17 @@
 import { ClipboardList } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/app/actions/product";
 import { ProductCard, type PendingProduct } from "./ProductCard";
 
-// Auth + is_admin gate lives in app/admin/layout.tsx — shared by every
-// /admin/* route, so it isn't repeated here.
+// Sellers' WhatsApp numbers aren't readable through normal logged-in
+// access (20261001b_lock_whatsapp_column.sql), so this page reads with the
+// service-role client. That bypasses RLS, so the admin check is repeated
+// here rather than relying on app/admin/layout.tsx alone — Next renders a
+// layout and its page in parallel, so a layout redirect doesn't stop the
+// page's own data fetch from running.
 export default async function AdminPage() {
-  const supabase = await createClient();
+  await requireAdmin();
+  const supabase = createAdminClient();
 
   // ── Fetch pending products with seller info ─────────────────────────────
   const { data: products } = await supabase

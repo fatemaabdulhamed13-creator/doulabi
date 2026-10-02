@@ -49,8 +49,12 @@ export default function SearchFilters() {
   const [maxPrice, setMaxPrice] = useState(sp.get("maxPrice") ?? "");
   const [color,    setColor]    = useState(sp.get("color")    ?? "");
   const [city,     setCity]     = useState(sp.get("city")     ?? "");
-  const [brand,          setBrand]          = useState(sp.get("brand") ?? "");
-  const [brandQuery,     setBrandQuery]     = useState(sp.get("brand") ? (BRAND_LABEL[sp.get("brand")!] ?? sp.get("brand")!) : "");
+  // products.brand stores the Arabic label (what the app, the admin panel and
+  // the edit form all save), so that's the value filtered on. An English
+  // ?brand=Zara from an old link is mapped to its label.
+  const initialBrand = sp.get("brand") ? (BRAND_LABEL[sp.get("brand")!] ?? sp.get("brand")!) : "";
+  const [brand,          setBrand]          = useState(initialBrand);
+  const [brandQuery,     setBrandQuery]     = useState(initialBrand);
   const [brandComboOpen, setBrandComboOpen] = useState(false);
   const brandRef = useRef<HTMLDivElement>(null);
   const [delivery, setDelivery] = useState(sp.get("delivery") === "true");
@@ -177,10 +181,10 @@ export default function SearchFilters() {
                   <li
                     key={b.value}
                     dir="rtl"
-                    className={`px-4 py-2.5 cursor-pointer hover:bg-muted transition-colors ${brand === b.value ? "text-primary font-semibold" : "text-foreground"}`}
+                    className={`px-4 py-2.5 cursor-pointer hover:bg-muted transition-colors ${brand === b.label ? "text-primary font-semibold" : "text-foreground"}`}
                     onMouseDown={(e) => {
                       e.preventDefault();
-                      setBrand(b.value);
+                      setBrand(b.label);
                       setBrandQuery(b.label);
                       setBrandComboOpen(false);
                     }}

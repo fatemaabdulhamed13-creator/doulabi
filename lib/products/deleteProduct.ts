@@ -1,6 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { r2, R2_BUCKET } from "@/lib/r2";
+import { r2, R2_BUCKET, r2KeyFromPublicUrl } from "@/lib/r2";
 
 export type DeleteProductResult = { error: string } | { ok: true };
 
@@ -48,20 +48,17 @@ export async function deleteProductForUser(
 
   // Best-effort image cleanup — the row (the part that actually matters to
   // the seller) is already gone regardless of whether this succeeds.
-  const publicBase = process.env.NEXT_PUBLIC_R2_PUBLIC_URL?.replace(/\/$/, "");
-  if (publicBase) {
-    await Promise.all(
-      (existing.image_urls ?? []).map(async (url: string) => {
-        if (!url.startsWith(`${publicBase}/`)) return;
-        const key = url.slice(publicBase.length + 1);
-        try {
-          await r2.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key }));
-        } catch (err) {
-          console.error("[deleteProductForUser] failed to delete R2 object:", key, err);
-        }
-      })
-    );
-  }
+  await Promise.all(
+    (existing.image_urls ?? []).map(async (url: string) => {
+      const key = r2KeyFromPublicUrl(url);
+      if (!key) return;
+      try {
+        await r2.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key }));
+      } catch (err) {
+        console.error("[deleteProductForUser] failed to delete R2 object:", key, err);
+      }
+    })
+  );
 
   return { ok: true };
 }

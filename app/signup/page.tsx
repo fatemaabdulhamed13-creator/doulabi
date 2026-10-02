@@ -138,7 +138,7 @@ export default function SignupPage() {
                 placeholder="••••••••"
                 dir="ltr"
                 required
-                minLength={6}
+                minLength={8}
                 className={input}
               />
             </div>

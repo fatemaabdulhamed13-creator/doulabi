@@ -1,4 +1,4 @@
-import Image from "next/image";
+import ListingThumbnail from "@/components/ListingThumbnail";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ShoppingBag } from "lucide-react";
@@ -82,7 +82,7 @@ export default async function PublicProfilePage({ params }: Props) {
                 <Link key={p.id} href={`/product/${p.id}`} className="group flex flex-col gap-2">
                   <div className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-muted">
                     {img ? (
-                      <Image
+                      <ListingThumbnail
                         src={img}
                         alt={`${p.brand} — ${p.title}`}
                         fill

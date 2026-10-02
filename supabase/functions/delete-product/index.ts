@@ -28,9 +28,15 @@ async function readParams(req: Request): Promise<Record<string, string>> {
   return params;
 }
 
+// Listings saved before the move to img.shopdoulabi.com (R2_PUBLIC_URL) still store r2.dev URLs.
+const LEGACY_R2_PUBLIC_URL = "https://pub-8f4065c3efc2429a8696ab412bf33229.r2.dev";
+
 async function deleteFromR2(imageUrl: string): Promise<void> {
-  const publicBase = Deno.env.get("R2_PUBLIC_URL")?.replace(/\/$/, "");
-  if (!publicBase || !imageUrl.startsWith(`${publicBase}/`)) return;
+  const publicBase = [Deno.env.get("R2_PUBLIC_URL"), LEGACY_R2_PUBLIC_URL]
+    .filter((b): b is string => !!b)
+    .map((b) => b.replace(/\/$/, ""))
+    .find((b) => imageUrl.startsWith(`${b}/`));
+  if (!publicBase) return;
   const key = imageUrl.slice(publicBase.length + 1);
 
   const r2 = new AwsClient({

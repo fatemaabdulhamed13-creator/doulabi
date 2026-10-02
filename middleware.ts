@@ -42,6 +42,8 @@ export const config = {
     // Skip static assets (as before), plus purely-public static routes that
     // never depend on auth state: the PWA manifest/service worker, and the
     // static legal pages.
-    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|terms|privacy|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // .well-known: app-link verification files Apple/Google fetch directly —
+    // must be served as-is, never redirected.
+    "/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|terms|privacy|\\.well-known|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

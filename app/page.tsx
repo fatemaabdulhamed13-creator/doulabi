@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import ListingThumbnail from "@/components/ListingThumbnail";
 import { unstable_cache } from "next/cache";
 import { ShoppingBag, Search } from "lucide-react";
 import { createPublicClient } from "@/lib/supabase/public";
@@ -22,14 +23,16 @@ const CATEGORIES = [
   { label: "ملابس أطفال",    href: "/search?category=ملابس أطفال",    image: "/category-baby.png"         },
 ];
 
+// href filters on the exact `products.brand` value, which is the Arabic label
+// (lib/brands.ts) — the old lowercase slugs like "zara" matched nothing.
 const BRANDS = [
-  { name: "زارا",       logo: "/brands/zara.png",        href: "/search?brand=zara"        },
-  { name: "مونسون",     logo: "/brands/monsoon.png",     href: "/search?brand=monsoon"     },
-  { name: "ديون",       logo: "/brands/dune.png",        href: "/search?brand=dune"        },
-  { name: "شيري هيل",   logo: "/brands/sherri-hill.png", href: "/search?brand=sherri-hill" },
-  { name: "مايكل كورس", logo: "/brands/michael-kors.png", href: "/search?brand=michael-kors" },
-  { name: "جيزيا",      logo: "/brands/gizia.png",       href: "/search?brand=gizia"       },
-];
+  { name: "زارا",       logo: "/brands/zara.png"          },
+  { name: "مونسون",     logo: "/brands/monsoon.png"       },
+  { name: "ديون",       logo: "/brands/dune.png"          },
+  { name: "شيري هيل",   logo: "/brands/sherri-hill.png"   },
+  { name: "مايكل كورس", logo: "/brands/michael-kors.png"  },
+  { name: "جيزيا",      logo: "/brands/gizia.png"         },
+].map((b) => ({ ...b, href: `/search?brand=${encodeURIComponent(b.name)}` }));
 
 /* ── Pagination config ───────────────────────────────────────────────────── */
 
@@ -265,7 +268,7 @@ export default async function Home({
                       <div className="relative aspect-[3/4] rounded-2xl overflow-hidden mb-3 bg-muted">
                         <Link href={`/product/${p.id}`} className="block w-full h-full">
                           {img ? (
-                            <Image
+                            <ListingThumbnail
                               src={img}
                               alt={`${p.brand} — ${p.title}`}
                               fill

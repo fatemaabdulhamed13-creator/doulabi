@@ -1,4 +1,5 @@
 import React from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft, Pencil, Ruler, Sparkles, Tag, Layers, Truck, Palette, MapPin } from "lucide-react";
 import { notFound } from "next/navigation";
@@ -31,6 +32,7 @@ type Product = {
   color:              string | null;
   city:               string | null;
   delivery_available: boolean;
+  is_sold:            boolean;
   profiles: {
     full_name:        string;
   } | null;
@@ -45,7 +47,7 @@ const getProduct = unstable_cache(
       .select(`
         id, seller_id, title, price, brand, size_type, size_value,
         condition, category, description, image_urls, is_open_to_offers,
-        color, city, delivery_available,
+        color, city, delivery_available, is_sold,
         profiles ( full_name )
       `)
       .eq("id", id)
@@ -68,17 +70,14 @@ async function getViewer() {
   return id ? { id, supabase } : null;
 }
 
-// Phone numbers are only readable by logged-in users (anon has no column grant).
+// The column itself isn't readable (20261001 migrations); this function
+// returns the number only to logged-in viewers of a live listing.
 async function getSellerWhatsapp(
   supabase: Awaited<ReturnType<typeof createClient>>,
-  sellerId: string,
+  productId: string,
 ): Promise<string | null> {
-  const { data } = await supabase
-    .from("profiles")
-    .select("whatsapp_number")
-    .eq("id", sellerId)
-    .maybeSingle();
-  return data?.whatsapp_number ?? null;
+  const { data } = await supabase.rpc("get_seller_whatsapp", { p_product_id: productId });
+  return typeof data === "string" && data ? data : null;
 }
 
 /* ── WhatsApp CTA ────────────────────────────────────────────────────────── */
@@ -106,6 +105,47 @@ function WhatsAppCTA({ href }: { href: string }) {
   );
 }
 
+/* ── Link preview ────────────────────────────────────────────────────────── */
+
+// What WhatsApp/Facebook/iMessage show when a listing link is shared — the
+// mobile app's share button and every WhatsApp inquiry link here. Uses the
+// 600px thumbnail when the photo has one (lighter, and WhatsApp skips
+// preview images over ~300KB); older photos fall back to the full image.
+function previewImage(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  const match = url.match(/^(.*\/photos\/)([^/]+)$/);
+  return match ? `${match[1]}thumbs/${match[2]}` : url;
+}
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { id } = await params;
+  const product = await getProduct(id);
+  if (!product) return { title: "دولابي" };
+
+  const title = `${product.title} — ${product.price} د.ل`;
+  const description =
+    product.description?.slice(0, 160) ||
+    [BRAND_LABEL[product.brand] ?? product.brand, product.size_value, product.condition]
+      .filter(Boolean)
+      .join(" · ");
+  const image = previewImage(product.image_urls?.[0]);
+
+  return {
+    title: `${title} | دولابي`,
+    description,
+    openGraph: {
+      title,
+      description,
+      siteName: "دولابي",
+      locale: "ar_LY",
+      type: "website",
+      url: `/product/${product.id}`,
+      ...(image ? { images: [{ url: image }] } : {}),
+    },
+    twitter: { card: image ? "summary_large_image" : "summary", title, description },
+  };
+}
+
 /* ── Page ────────────────────────────────────────────────────────────────── */
 
 export default async function ProductPage({ params }: Props) {
@@ -117,14 +157,18 @@ export default async function ProductPage({ params }: Props) {
   const seller         = product.profiles;
   const sellerInitial  = seller?.full_name.charAt(0) ?? "؟";
   const isOwner        = viewer?.id === product.seller_id;
-  const whatsapp       = viewer ? await getSellerWhatsapp(viewer.supabase, product.seller_id) : null;
-  const whatsappHref   = !viewer
-    ? `/signup?redirect=/product/${id}`
-    : whatsapp
-      ? `https://wa.me/${whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(
-          `مرحباً، أنا مهتم بشراء: ${product.title}`
-        )}`
-      : null;
+  const whatsapp       = viewer && !product.is_sold ? await getSellerWhatsapp(viewer.supabase, product.id) : null;
+  // Same neutral opener as the mobile app, plus price and link so a seller
+  // with many listings knows which piece this is. Sold: no contact at all.
+  const whatsappHref   = product.is_sold
+    ? null
+    : !viewer
+      ? `/signup?redirect=/product/${id}`
+      : whatsapp
+        ? `https://wa.me/${whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(
+            `مرحباً، هل هذه القطعة ما زالت متوفرة؟\n${product.title} — ${product.price} د.ل\nhttps://shopdoulabi.com/product/${product.id}`
+          )}`
+        : null;
 
   return (
     <div dir="rtl" className="min-h-screen bg-background">
@@ -150,6 +194,11 @@ export default async function ProductPage({ params }: Props) {
 
           {/* Product info */}
           <section className="py-5 border-b border-border">
+            {product.is_sold && (
+              <p className="mb-3 rounded-xl bg-muted px-3.5 py-2.5 text-sm font-bold text-foreground">
+                تم بيع هذه القطعة ولم تعد متوفرة.
+              </p>
+            )}
             <p className="text-[11px] font-bold text-primary uppercase tracking-widest mb-1.5">
               {BRAND_LABEL[product.brand] ?? product.brand}
             </p>

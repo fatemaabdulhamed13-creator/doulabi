@@ -15,11 +15,23 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
+// The bucket was first served from its r2.dev address, then moved to img.shopdoulabi.com
+// (R2_PUBLIC_URL). Listings saved before the switch still store r2.dev URLs, so both must resolve.
+const LEGACY_R2_PUBLIC_URL = "https://pub-8f4065c3efc2429a8696ab412bf33229.r2.dev";
+
 function keyFromPublicUrl(url: string): string | null {
-  const base = Deno.env.get("R2_PUBLIC_URL")?.replace(/\/$/, "");
-  if (!base || !url.startsWith(`${base}/`)) return null;
+  const bases = [Deno.env.get("R2_PUBLIC_URL"), LEGACY_R2_PUBLIC_URL]
+    .filter((b): b is string => !!b)
+    .map((b) => b.replace(/\/$/, ""));
+  const base = bases.find((b) => url.startsWith(`${b}/`));
+  if (!base) return null;
   const key = url.slice(base.length + 1);
   return key && !key.includes("..") ? key : null;
+}
+
+function thumbKeyFor(key: string): string | null {
+  const match = key.match(/^([^/]+)\/photos\/([^/]+)$/);
+  return match ? `${match[1]}/photos/thumbs/${match[2]}` : null;
 }
 
 Deno.serve(async (req) => {
@@ -37,18 +49,27 @@ Deno.serve(async (req) => {
   }
   if (payload.table !== "products") return json({ skipped: "not the products table" });
 
-  const oldUrls = payload.old_record?.image_urls ?? [];
-  let removedUrls: string[];
+  // Compared by R2 key, not URL: rewriting a listing's URLs from the r2.dev address to the
+  // custom domain changes every URL but no file, and must not delete anything.
+  const toKeys = (urls: string[] | null | undefined) =>
+    (urls ?? []).map(keyFromPublicUrl).filter((k): k is string => k !== null);
+  const oldKeys = toKeys(payload.old_record?.image_urls);
+  let removedKeys: string[];
   if (payload.type === "DELETE") {
-    removedUrls = oldUrls;
+    removedKeys = oldKeys;
   } else if (payload.type === "UPDATE") {
-    const kept = new Set(payload.record?.image_urls ?? []);
-    removedUrls = oldUrls.filter((url) => !kept.has(url));
+    const kept = new Set(toKeys(payload.record?.image_urls));
+    removedKeys = oldKeys.filter((key) => !kept.has(key));
   } else {
     return json({ skipped: payload.type });
   }
 
-  const keys = removedUrls.map(keyFromPublicUrl).filter((k): k is string => k !== null);
+  const keys = removedKeys.flatMap((k) => {
+    // Photos under photos/ have a card thumbnail at photos/thumbs/ with the same filename
+    // (see presign-upload). R2 returns 204 for a missing key, so a failed thumb upload is fine.
+    const thumbKey = thumbKeyFor(k);
+    return thumbKey ? [k, thumbKey] : [k];
+  });
   if (keys.length === 0) return json({ deleted: 0 });
 
   const r2 = new AwsClient({

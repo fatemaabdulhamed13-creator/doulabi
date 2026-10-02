@@ -1,4 +1,4 @@
-import Image from "next/image";
+import ListingThumbnail from "@/components/ListingThumbnail";
 import Link from "next/link";
 import { Heart } from "lucide-react";
 import { redirect } from "next/navigation";
@@ -66,7 +66,7 @@ export default async function FavoritesPage({
                   <div className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-muted">
                     <Link href={`/product/${item.id}`} className="block w-full h-full">
                       {img ? (
-                        <Image
+                        <ListingThumbnail
                           src={img}
                           alt={`${item.brand} — ${item.title}`}
                           fill

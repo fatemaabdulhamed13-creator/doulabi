@@ -1,0 +1,13 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["FQ4P64DNX4.com.doulabi.app"],
+        "components": [
+          { "/": "/product/*", "comment": "Listing pages open in the app" },
+          { "/": "/profile/*", "comment": "Seller pages open in the app" }
+        ]
+      }
+    ]
+  }
+}

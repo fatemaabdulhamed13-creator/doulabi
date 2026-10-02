@@ -40,7 +40,12 @@ async function getUserId(req: Request): Promise<string | null> {
   return error || !data.user ? null : data.user.id;
 }
 
-async function presignPut(key: string): Promise<string> {
+// Content-Type is signed into the URL, so the upload must carry exactly the
+// image type checked below — otherwise R2 rejects it. Without this, a
+// signed URL accepted any file (e.g. an HTML page, which R2 would then serve
+// from img.shopdoulabi.com as a page on our own domain). aws4fetch leaves
+// content-type out of the signature unless allHeaders is set.
+async function presignPut(key: string, contentType: string): Promise<string> {
   const r2 = new AwsClient({
     accessKeyId: Deno.env.get("R2_ACCESS_KEY_ID")!,
     secretAccessKey: Deno.env.get("R2_SECRET_ACCESS_KEY")!,
@@ -51,7 +56,10 @@ async function presignPut(key: string): Promise<string> {
   const bucket = Deno.env.get("R2_BUCKET_NAME")!;
   const url = new URL(`https://${account}.r2.cloudflarestorage.com/${bucket}/${key}`);
   url.searchParams.set("X-Amz-Expires", String(PRESIGN_EXPIRES_SECONDS));
-  const signed = await r2.sign(new Request(url, { method: "PUT" }), { aws: { signQuery: true } });
+  const signed = await r2.sign(
+    new Request(url, { method: "PUT", headers: { "content-type": contentType } }),
+    { aws: { signQuery: true, allHeaders: true } },
+  );
   return signed.url;
 }
 
@@ -73,13 +81,26 @@ Deno.serve(async (req) => {
     const ext = (filename.split(".").pop() || "jpg").toLowerCase();
     const safeExt = ALLOWED_EXTS.includes(ext) ? ext : "jpg";
     const uid = crypto.randomUUID().replace(/-/g, "").slice(0, 16);
+
+    // Newer app builds send thumb=1 and upload a small card-sized copy alongside the photo.
+    // Those photos live under photos/, their thumbnail at photos/thumbs/ with the same filename —
+    // the /photos/ segment is how cards know a thumbnail exists (older keys have none), and how
+    // webhook-cleanup-r2 knows to delete it too.
+    if (params.thumb === "1") {
+      const key = `${userId}/photos/${uid}.${safeExt}`;
+      const thumbKey = `${userId}/photos/thumbs/${uid}.${safeExt}`;
+      const [presignedUrl, thumbPresignedUrl] = await Promise.all([presignPut(key, contentType), presignPut(thumbKey, contentType)]);
+      return json({ presignedUrl, key, thumbPresignedUrl, thumbKey });
+    }
+
     // Not under raw/: the app uses this key as the listing's permanent photo, and raw/ expires after 24h.
     const key = `${userId}/${uid}.${safeExt}`;
 
-    return json({ presignedUrl: await presignPut(key), key });
+    return json({ presignedUrl: await presignPut(key, contentType), key });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error("[presign-upload] unexpected error:", msg);
-    return json({ error: msg }, 500);
+    // Details stay in the function logs, not in the response.
+    return json({ error: "Upload could not be prepared" }, 500);
   }
 });

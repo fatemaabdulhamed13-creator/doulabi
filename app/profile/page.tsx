@@ -1,4 +1,4 @@
-import Image from "next/image";
+import ListingThumbnail from "@/components/ListingThumbnail";
 import Link from "next/link";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
@@ -196,7 +196,7 @@ export default async function ProfilePage({
 
                     {/* Thumbnail */}
                     {img ? (
-                      <Image
+                      <ListingThumbnail
                         src={img}
                         alt={product.title}
                         fill

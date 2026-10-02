@@ -24,7 +24,11 @@ import { createClient } from "@supabase/supabase-js";
 
 const DELETE = process.argv.includes("--delete");
 const MIN_AGE_MS = 48 * 60 * 60 * 1000;
-const USER_FILE_KEY = /^(raw\/)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[^/]+$/i;
+// <user>/<file>, raw/<user>/<file>, and newer uploads' <user>/photos/<file> + <user>/photos/thumbs/<file>.
+const USER_FILE_KEY = /^(raw\/)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/(photos\/(thumbs\/)?)?[^/]+$/i;
+// Listings saved before the move to the custom domain still store r2.dev URLs. Without this, every
+// one of their photos would look unreferenced — and be deleted with --delete.
+const LEGACY_R2_PUBLIC_URL = "https://pub-8f4065c3efc2429a8696ab412bf33229.r2.dev";
 
 const required = [
   "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "NEXT_PUBLIC_R2_PUBLIC_URL",
@@ -36,7 +40,7 @@ if (missing.length) {
   process.exit(1);
 }
 
-const publicBase = process.env.NEXT_PUBLIC_R2_PUBLIC_URL.replace(/\/$/, "");
+const publicBases = [process.env.NEXT_PUBLIC_R2_PUBLIC_URL, LEGACY_R2_PUBLIC_URL].map((b) => b.replace(/\/$/, ""));
 const bucket = process.env.R2_BUCKET_NAME;
 const r2 = new S3Client({
   region: "auto",
@@ -51,7 +55,9 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.
 });
 
 function keyFromUrl(url) {
-  if (typeof url !== "string" || !url.startsWith(`${publicBase}/`)) return null;
+  if (typeof url !== "string") return null;
+  const publicBase = publicBases.find((b) => url.startsWith(`${b}/`));
+  if (!publicBase) return null;
   const path = url.slice(publicBase.length + 1).split("?")[0];
   try {
     return decodeURIComponent(path);
@@ -92,7 +98,11 @@ const profiles = await fetchAll("profiles", "avatar_url");
 const inUse = new Set();
 for (const p of products) for (const url of p.image_urls ?? []) {
   const key = keyFromUrl(url);
-  if (key) inUse.add(key);
+  if (!key) continue;
+  inUse.add(key);
+  // A photo's thumbnail isn't stored in the DB — it's in use whenever the photo is.
+  const photo = key.match(/^([^/]+)\/photos\/([^/]+)$/);
+  if (photo) inUse.add(`${photo[1]}/photos/thumbs/${photo[2]}`);
 }
 for (const p of profiles) {
   const key = keyFromUrl(p.avatar_url);

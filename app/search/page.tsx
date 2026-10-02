@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import Image from "next/image";
+import ListingThumbnail from "@/components/ListingThumbnail";
 import Link from "next/link";
 import { unstable_cache } from "next/cache";
 import { ShoppingBag } from "lucide-react";
@@ -76,7 +76,10 @@ export default async function SearchPage({ searchParams }: Props) {
         .eq("status", "approved")
         .eq("is_sold", false);
 
-      if (q)           query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`);
+      // Commas, parentheses, quotes and backslashes are syntax inside or=(...) —
+      // "فستان, أسود" used to break the query. They mean nothing for a text match.
+      const term = q?.replace(/[,()"\\]/g, " ").replace(/\s+/g, " ").trim();
+      if (term)        query = query.or(`title.ilike.%${term}%,description.ilike.%${term}%`);
       if (category)    query = query.eq("category",           category);
       if (subcategory) query = query.eq("subcategory", subcategory);
       if (size)        query = query.eq("size_value",          size);
@@ -251,7 +254,7 @@ export default async function SearchPage({ searchParams }: Props) {
                   >
                     <div className="relative aspect-[3/4] rounded-2xl overflow-hidden bg-muted">
                       {img ? (
-                        <Image
+                        <ListingThumbnail
                           src={img}
                           alt={`${p.brand} — ${p.title}`}
                           fill
