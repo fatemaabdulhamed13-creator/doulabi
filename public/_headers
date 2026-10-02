@@ -1,0 +1,4 @@
+# Apple requires the app-link file as JSON; Netlify serves public/ files
+# directly (the headers() rule in next.config.ts doesn't reach them).
+/.well-known/apple-app-site-association
+  Content-Type: application/json

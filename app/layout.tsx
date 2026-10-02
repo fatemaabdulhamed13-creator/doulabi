@@ -16,7 +16,7 @@ const cairo = Cairo({
 export const metadata: Metadata = {
   // Base for relative URLs in page metadata (e.g. a product's og:url), so
   // link previews point at the real domain, not localhost/Vercel preview.
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://shopdoulabi.com"),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.shopdoulabi.com"),
   title: "دولابي — سوق الموضة المستعملة في ليبيا",
   description: "اشتر وبع الملابس والإكسسوارات المستعملة في ليبيا",
   appleWebApp: {

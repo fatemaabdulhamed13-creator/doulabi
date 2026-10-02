@@ -166,7 +166,7 @@ export default async function ProductPage({ params }: Props) {
       ? `/signup?redirect=/product/${id}`
       : whatsapp
         ? `https://wa.me/${whatsapp.replace(/\D/g, "")}?text=${encodeURIComponent(
-            `مرحباً، هل هذه القطعة ما زالت متوفرة؟\n${product.title} — ${product.price} د.ل\nhttps://shopdoulabi.com/product/${product.id}`
+            `مرحباً، هل هذه القطعة ما زالت متوفرة؟\n${product.title} — ${product.price} د.ل\nhttps://www.shopdoulabi.com/product/${product.id}`
           )}`
         : null;
 
