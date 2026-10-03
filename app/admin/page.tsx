@@ -1,33 +1,47 @@
 import { ClipboardList } from "lucide-react";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/app/actions/product";
 import { ProductCard, type PendingProduct } from "./ProductCard";
 
-// Sellers' WhatsApp numbers aren't readable through normal logged-in
-// access (20261001b_lock_whatsapp_column.sql), so this page reads with the
-// service-role client. That bypasses RLS, so the admin check is repeated
-// here rather than relying on app/admin/layout.tsx alone — Next renders a
-// layout and its page in parallel, so a layout redirect doesn't stop the
-// page's own data fetch from running.
+// Reads with the admin's own session — RLS already lets admins see every
+// listing. Sellers' numbers aren't readable that way (the column is locked
+// for all logged-in users), so they come from admin_seller_whatsapp(),
+// which only answers admins. No service-role key involved, so this page
+// doesn't depend on that key being set in the hosting environment.
 export default async function AdminPage() {
-  await requireAdmin();
-  const supabase = createAdminClient();
+  const supabase = await requireAdmin();
 
   // ── Fetch pending products with seller info ─────────────────────────────
-  const { data: products } = await supabase
+  const { data: rows, error } = await supabase
     .from('products')
     .select(`
-      id, title, price, category, brand,
+      id, seller_id, title, price, category, brand,
       size_type, size_value, condition,
       description, image_urls, created_at,
-      profiles ( full_name, whatsapp_number )
+      profiles ( full_name )
     `)
     .eq('status', 'pending')
     .order('created_at', { ascending: false })
     .limit(50)
-    .returns<PendingProduct[]>();
+  if (error) console.error('[admin] failed to load pending listings:', error.message)
 
-  const pending = products ?? [];
+  const sellerIds = [...new Set((rows ?? []).map((r) => r.seller_id as string))]
+  const { data: numbers } = sellerIds.length
+    ? await supabase.rpc('admin_seller_whatsapp', { p_seller_ids: sellerIds })
+    : { data: [] as { id: string; whatsapp_number: string }[] }
+  const numberBySeller = new Map(
+    ((numbers ?? []) as { id: string; whatsapp_number: string }[]).map((n) => [n.id, n.whatsapp_number]),
+  )
+
+  const pending: PendingProduct[] = (rows ?? []).map((r) => {
+    // supabase-js types the many-to-one join as an array without generated types.
+    const seller = (Array.isArray(r.profiles) ? r.profiles[0] : r.profiles) as { full_name: string } | null
+    return {
+      ...r,
+      profiles: seller
+        ? { full_name: seller.full_name, whatsapp_number: numberBySeller.get(r.seller_id as string) ?? '' }
+        : null,
+    } as PendingProduct
+  })
 
   return (
     <main className="max-w-5xl mx-auto p-8">
