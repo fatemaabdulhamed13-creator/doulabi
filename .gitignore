@@ -42,3 +42,8 @@ next-env.d.ts
 
 # Supabase CLI working files
 supabase/.temp/
+
+# cloudflare / opennext
+.open-next
+.wrangler
+.dev.vars*

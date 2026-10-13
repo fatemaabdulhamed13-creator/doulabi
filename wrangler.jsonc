@@ -1,0 +1,41 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "main": ".open-next/worker.js",
+  "name": "doulabi",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    {
+      // Self-reference used by OpenNext for cache revalidation; must match "name"
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "doulabi"
+    }
+  ],
+  "r2_buckets": [
+    {
+      // Next.js data cache (unstable_cache)
+      "binding": "NEXT_INC_CACHE_R2_BUCKET",
+      "bucket_name": "doulabi-opennext-cache"
+    }
+  ],
+  "d1_databases": [
+    {
+      // revalidateTag() timestamps
+      "binding": "NEXT_TAG_CACHE_D1",
+      "database_name": "doulabi-tag-cache",
+      // Filled in after `npx wrangler d1 create doulabi-tag-cache`
+      "database_id": "00000000-0000-0000-0000-000000000000"
+    }
+  ],
+  "images": {
+    // next/image optimization via Cloudflare Images
+    "binding": "IMAGES"
+  },
+  "observability": {
+    "enabled": true
+  }
+}

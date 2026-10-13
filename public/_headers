@@ -1,4 +1,8 @@
-# Apple requires the app-link file as JSON; Netlify serves public/ files
-# directly (the headers() rule in next.config.ts doesn't reach them).
+# Apple requires the app-link file as JSON; Netlify and Cloudflare serve public/
+# files directly (the headers() rules in next.config.ts don't reach them).
 /.well-known/apple-app-site-association
   Content-Type: application/json
+
+/sw.js
+  Content-Type: application/javascript; charset=utf-8
+  Cache-Control: no-cache, no-store, must-revalidate
