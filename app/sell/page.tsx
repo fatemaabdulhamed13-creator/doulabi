@@ -1,9 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
 
-// TODO: paste the store links once the app is published. While null, each badge is shown but not clickable.
-const APP_STORE_URL: string | null = null;   // e.g. "https://apps.apple.com/app/idXXXXXXXXX"
-const PLAY_STORE_URL: string | null = null;  // e.g. "https://play.google.com/store/apps/details?id=com.example"
+// While a link is null its badge is shown dimmed with a "coming soon" note and isn't clickable.
+const APP_STORE_URL: string | null = "https://apps.apple.com/app/id6810699386";
+const PLAY_STORE_URL: string | null = null;  // TODO: e.g. "https://play.google.com/store/apps/details?id=com.doulabi.app"
 
 function StoreBadge({ href, src, alt, width }: { href: string | null; src: string; alt: string; width: number }) {
   const badge = <Image src={src} alt={alt} width={width} height={48} unoptimized className="h-12 w-auto" />;
@@ -12,7 +12,10 @@ function StoreBadge({ href, src, alt, width }: { href: string | null; src: strin
       {badge}
     </a>
   ) : (
-    <span aria-disabled="true">{badge}</span>
+    <span aria-disabled="true" className="flex flex-col items-center gap-1.5">
+      <span className="opacity-50">{badge}</span>
+      <span className="text-xs text-gray-500">قريباً</span>
+    </span>
   );
 }
 
@@ -40,8 +43,8 @@ export default function SellPage() {
         </p>
 
         <div className="flex flex-col items-center gap-5">
-          <span className="text-sm font-semibold text-foreground">قريباً على</span>
-          <div className="flex flex-wrap items-center justify-center gap-4">
+          <span className="text-sm font-semibold text-foreground">حمّل التطبيق</span>
+          <div className="flex flex-wrap items-start justify-center gap-4">
             <StoreBadge href={APP_STORE_URL} src="/app-store-badge-ar.svg" alt="حمّله من App Store" width={144} />
             <StoreBadge href={PLAY_STORE_URL} src="/google-play-badge-ar.svg" alt="احصل عليه من Google Play" width={162} />
           </div>
