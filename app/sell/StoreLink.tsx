@@ -46,7 +46,7 @@ export default function StoreLink({ href, children }: { href: string; children: 
           dir="rtl"
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
           onClick={() => setShowHelp(false)}
         >
           <div
