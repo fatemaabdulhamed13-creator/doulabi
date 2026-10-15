@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import StoreLink from "./StoreLink";
 
 // While a link is null its badge is shown dimmed with a "coming soon" note and isn't clickable.
 const APP_STORE_URL: string | null = "https://apps.apple.com/app/id6810699386";
@@ -8,9 +9,7 @@ const PLAY_STORE_URL: string | null = null;  // TODO: e.g. "https://play.google.
 function StoreBadge({ href, src, alt, width }: { href: string | null; src: string; alt: string; width: number }) {
   const badge = <Image src={src} alt={alt} width={width} height={48} unoptimized className="h-12 w-auto" />;
   return href ? (
-    <a href={href} className="hover:opacity-85 active:scale-[0.98] transition-all">
-      {badge}
-    </a>
+    <StoreLink href={href}>{badge}</StoreLink>
   ) : (
     <span aria-disabled="true" className="flex flex-col items-center gap-1.5">
       <span className="opacity-50">{badge}</span>
