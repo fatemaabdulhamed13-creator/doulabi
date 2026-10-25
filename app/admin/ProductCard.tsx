@@ -9,12 +9,14 @@ import {
 } from '@/app/actions/product'
 import { BRANDS } from '@/lib/brands'
 import { CATEGORIES } from '@/lib/categories'
+import { SUB_CATEGORIES } from '@/lib/subcategories'
 
 export type PendingProduct = {
   id:               string
   title:            string
   price:            number
   category:         string
+  subcategory:      string | null
   brand:            string
   size_type:        string
   size_value:       string
@@ -39,6 +41,7 @@ const SELECT_CLS = `
 export function ProductCard({ product }: { product: PendingProduct }) {
   const [images,   setImages]   = useState(product.image_urls)
   const [category, setCategory] = useState(product.category)
+  const [subcategory, setSubcategory] = useState(product.subcategory ?? '')
   const [brand,    setBrand]    = useState(product.brand)
   const [isPending, startTransition] = useTransition()
 
@@ -68,7 +71,7 @@ export function ProductCard({ product }: { product: PendingProduct }) {
 
   function handleApprove() {
     startTransition(() =>
-      approveProductWithImagesAction(product.id, images, category, brand)
+      approveProductWithImagesAction(product.id, images, category, subcategory || null, brand)
     )
   }
 
@@ -161,8 +164,8 @@ export function ProductCard({ product }: { product: PendingProduct }) {
             </span>
           </div>
 
-          {/* ── Inline-editable Category & Brand ──────────────────────── */}
-          <div className="grid grid-cols-2 gap-2">
+          {/* ── Inline-editable Category, Subcategory & Brand ─────────── */}
+          <div className="grid grid-cols-3 gap-2">
             <div className="flex flex-col gap-1">
               <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                 الفئة
@@ -194,6 +197,8 @@ export function ProductCard({ product }: { product: PendingProduct }) {
                         aria-selected={category === c}
                         onMouseDown={(e) => {
                           e.preventDefault()
+                          // A subcategory only makes sense under its own category
+                          if (c !== category) setSubcategory('')
                           setCategory(c)
                           setCategoryOpen(false)
                         }}
@@ -208,6 +213,27 @@ export function ProductCard({ product }: { product: PendingProduct }) {
                   </ul>
                 )}
               </div>
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                الفئة الفرعية
+              </label>
+              <select
+                value={subcategory}
+                onChange={(e) => setSubcategory(e.target.value)}
+                disabled={isPending || (!SUB_CATEGORIES[category] && !subcategory)}
+                className={SELECT_CLS}
+              >
+                <option value="">—</option>
+                {/* Keep the submitted value visible even if it isn't in this category's list */}
+                {subcategory && !SUB_CATEGORIES[category]?.includes(subcategory) && (
+                  <option value={subcategory}>{subcategory}</option>
+                )}
+                {SUB_CATEGORIES[category]?.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
             </div>
 
             <div className="flex flex-col gap-1">
@@ -245,8 +271,8 @@ export function ProductCard({ product }: { product: PendingProduct }) {
                 {tag}
               </span>
             ))}
-            {/* Dim indicator when admin has changed category or brand */}
-            {(category !== product.category || brand !== product.brand) && (
+            {/* Dim indicator when admin has changed category, subcategory or brand */}
+            {(category !== product.category || subcategory !== (product.subcategory ?? '') || brand !== product.brand) && (
               <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-xs font-bold">
                 ✎ تم التعديل
               </span>

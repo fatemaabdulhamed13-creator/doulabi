@@ -14,7 +14,7 @@ export default async function AdminPage() {
   const { data: rows, error } = await supabase
     .from('products')
     .select(`
-      id, seller_id, title, price, category, brand,
+      id, seller_id, title, price, category, subcategory, brand,
       size_type, size_value, condition,
       description, image_urls, created_at,
       profiles ( full_name )

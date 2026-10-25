@@ -198,13 +198,14 @@ export async function approveProductWithImagesAction(
   productId: string,
   imageUrls: string[],
   category: string,
+  subcategory: string | null,
   brand: string,
 ) {
   const supabase = await requireAdmin()
 
   const { data, error } = await supabase
     .from('products')
-    .update({ status: 'approved', image_urls: imageUrls, category, brand })
+    .update({ status: 'approved', image_urls: imageUrls, category, subcategory: subcategory || null, brand })
     .eq('id', productId)
     .select('seller_id, title')
     .single()
