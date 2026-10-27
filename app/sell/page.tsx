@@ -4,7 +4,7 @@ import StoreLink from "./StoreLink";
 
 // While a link is null its badge is shown dimmed with a "coming soon" note and isn't clickable.
 const APP_STORE_URL: string | null = "https://apps.apple.com/app/id6810699386";
-const PLAY_STORE_URL: string | null = null;  // TODO: e.g. "https://play.google.com/store/apps/details?id=com.doulabi.app"
+const PLAY_STORE_URL: string | null = "https://play.google.com/store/apps/details?id=com.doulabi.app&hl=ar";
 
 function StoreBadge({ href, src, alt, width }: { href: string | null; src: string; alt: string; width: number }) {
   const badge = <Image src={src} alt={alt} width={width} height={48} unoptimized className="h-12 w-auto" />;

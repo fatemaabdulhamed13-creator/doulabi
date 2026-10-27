@@ -5,15 +5,17 @@ import { useState } from "react";
 // In-app browsers (TikTok, Instagram, Facebook, Snapchat…) block the
 // hand-off from a store link (apps.apple.com) to the store app, so iOS shows "action can't be
 // completed". For those visitors we explain how to open the page in Safari
-// instead of letting the tap fail.
+// instead of letting the tap fail. Android in-app browsers hand Play Store
+// links off fine, so the help is iOS-only.
 const IN_APP_BROWSER = /musical_ly|BytedanceWebview|TikTok|Instagram|FBAN|FBAV|FB_IAB|Snapchat|\bLine\//i;
+const IOS = /iPhone|iPad|iPod/i;
 
 export default function StoreLink({ href, children }: { href: string; children: React.ReactNode }) {
   const [showHelp, setShowHelp] = useState(false);
   const [copied, setCopied] = useState(false);
 
   function handleClick(e: React.MouseEvent<HTMLAnchorElement>) {
-    if (IN_APP_BROWSER.test(navigator.userAgent)) {
+    if (IOS.test(navigator.userAgent) && IN_APP_BROWSER.test(navigator.userAgent)) {
       e.preventDefault();
       setCopied(false);
       setShowHelp(true);
